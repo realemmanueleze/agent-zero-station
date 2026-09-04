@@ -27,6 +27,6 @@ type Channel = {
 }
 ```
 
-`commit_send` is worker-only. The scoring turn tools are `read_signal`, `search_ledger`, `draft_reply`, `query_db`, `vault_search`, `escalate`, `drop`. MCP is tools, not a producer.
+`commit_send` is worker-only. The scoring turn tools are `read_signal`, `search_ledger`, `draft_reply`, `query_db`, `vault_search`, `escalate`, `drop`. MCP is tools, not a producer. Without a model key, `runLiveTurn` is `Pack.draft` plus `beforePark`. Tenant A prompts never include tenant B ledger hits. The highest score label is the winner.
 
 Recorded replay compares `{ state, draftBody, tenantId }` only.
