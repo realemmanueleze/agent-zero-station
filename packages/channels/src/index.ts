@@ -1,4 +1,10 @@
 export {
+  mcpToolAllowed,
+  queryPackSql,
+  slackPostMessage,
+  vaultSearch,
+} from "./adapters.ts";
+export {
   graphBearer,
   normalizeGraphMessage,
   pollGraphInbox,
