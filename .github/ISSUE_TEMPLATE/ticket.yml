@@ -1,0 +1,54 @@
+name: Ticket
+description: A PR-train ticket. Tests and evals are specified before implementation.
+title: "[T] "
+labels: ["ticket"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Implementation is not allowed until `tickets/T<n>-<slug>/tests.md` and `evals.md` exist and the failing suite is committed.
+        See [docs/ENGINEERING.md](docs/ENGINEERING.md).
+  - type: input
+    id: id
+    attributes:
+      label: Ticket id
+      placeholder: T1
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What is true when this ticket is done. Not a list of files.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests (write these first)
+      description: Deterministic cases. Each line is one failing test name you will add before any feature code.
+    validations:
+      required: true
+  - type: textarea
+    id: evals
+    attributes:
+      label: Evals (write these first)
+      description: Agent-quality traces. Mark each gate merge or nightly.
+    validations:
+      required: true
+  - type: textarea
+    id: errors
+    attributes:
+      label: Error codes this ticket must emit
+      description: From packages/observability. Include the HTTP status and retryable flag.
+    validations:
+      required: true
+  - type: checkboxes
+    id: law
+    attributes:
+      label: Law
+      options:
+        - label: I will commit failing tests/evals before feature code
+          required: true
+        - label: I will only throw StationError and log through the shared logger
+          required: true

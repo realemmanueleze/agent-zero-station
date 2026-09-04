@@ -320,8 +320,8 @@ Every checklist starts with the same six boxes: [ ] image or `pnpm`, [ ] `/data`
 
 ## Open Questions
 
-- Public GitHub name. Placeholder `station-kit`.
 - License. Default MIT.
+- Public name is `agent-zero-station`: https://github.com/realemmanueleze/agent-zero-station
 
 ## Success Criteria
 
@@ -385,3 +385,134 @@ Adversarial review, 3 rounds. Last score 6/10. Skeleton (types, ledger, park HTT
 11. Scope — Learning cron and `tenantMode: workspace` can wait for v1.1 if the first park is late.
 12. Status — Assignment (name + README sentence) still precedes scaffolding.
 13. Feasibility — Cloud Run + local SQLite is a poor fit. `DEPLOY.md` must say VM/Fly/Railway for stateful `/data`, and treat Cloud Run as stateless-or-don't.
+
+## Eng review locks (2026-09-04)
+
+These replace conflicting lines above when they disagree.
+
+- Git: `dev` is default (staging). `main` is prod. Each PR is its own branch into `dev`. Repo: https://github.com/realemmanueleze/agent-zero-station
+- Worker binds 127.0.0.1. Cockpit proxies. `STATION_CONTROL_TOKEN` on that hop.
+- Off localhost, cockpit requires `STATION_COCKPIT_PASSWORD`.
+- `STATION_DATABASE_URL` — ledger, checkpointer, leases, claims. `PACK_DATABASE_URL` — optional pack SQL. Never the same catalog.
+- Lease per `ProducerRef` (30s heartbeat). Claim each signal (`FOR UPDATE SKIP LOCKED` or unique `(signalId, packId)`) before scoring.
+- `STATION_MASTER_KEY` from env. Never written into `/data`.
+- Guardrails (MCP writes, send tools) live in a user policy file. Default tight; user loosens.
+- Approve is idempotent: `sendId` + `sending`/`sent` compare-and-swap. Provider APIs may still double-send; local state must not.
+- CI on merge to `dev`: recorded replay, isolation hook, double-Approve mock, compose smoke. Postgres in Actions. No live Gmail.
+- `Pack.draft(signal, scores)` is required for recorded replay. Live path may still call `draft_reply`.
+- Fixture ingest upserts on unique `fixtureId`.
+- Worker HTTP is the only write path for the cockpit (list/approve/edit/kill/health).
+- Tests and evals are written before program code. See `docs/ENGINEERING.md`. Throw only `StationError`. Log only through `packages/observability`.
+
+## NOT in scope
+
+- Vercel Eve and a dual harness — clone-anywhere lost.
+- A hosted SaaS we operate — forkers host the container.
+- Microsoft Graph slipped from "backlog" to first PR train (user D13). After Gmail/IMAP park-and-send is green, Graph is the next branch on `dev`, not a later-year TODO.
+- Autonomous send — `act` is draft-and-park.
+- Embeddings for learning — markdown proposals only.
+- Prisma as a generic SQL adapter.
+- Outbound MCP server / `trigger_agent_reply`.
+- Cloud Run as the happy path — tokens and Postgres want a VM/Fly/Railway.
+- Full user-account product (OAuth login, teams) — shared cockpit password only.
+- OS keychain for tokens — breaks the one-image story.
+
+## What already exists
+
+- Contracts for T0–T7 are green against `getStation()` (`packages/station`). Ledger invariants, worker HTTP, Approve machine, cockpit password, policy, replay, and Graph normalize live there. `migrations/001_ledger.sql` is the Postgres shape. Live Gmail/IMAP/Graph IO and a running Postgres are the next wiring pass, not a new design.
+
+## Failure modes
+
+| Path | Failure | Test | User sees |
+| --- | --- | --- | --- |
+| Approve | Double click / two workers | Yes — sendId + mock commitSend | One Receipt |
+| Approve | Provider accepts, worker dies | Partial — `sending` state; no Gmail idempotency | Parked or sending; retry once |
+| Score | Two workers, same signal | Yes — claim | One draft |
+| Poll | Two workers, same mailbox | Yes — lease | One poller |
+| Isolation | Tenant B in prompt | Yes — onPromptBuild | CI fail |
+| MCP | Send tool attached | Policy file default deny | 403 / no send |
+| Fixture boot | Restart duplicates demo | Yes — unique fixtureId | One demo park |
+| commitSend | SMTP down | Fail stays parked | Error on card |
+
+Critical gap closed in review: double Approve, double poll, double draft, open cockpit URL. Remaining: Gmail has no real idempotency key (documented).
+
+## Test coverage (plan)
+
+```
+CODE PATHS                                              USER FLOWS
+[+] worker score/claim                                    [+] Fixture park in 20 min
+  ├── [GAP] claim miss → two drafts                       ├── [★★★] compose smoke
+  └── [GAP] winner rule on Score[]                        └── [GAP] pack switch re-score
+[+] commitSend                                            [+] Approve
+  ├── [★★★] sendId replay                                 ├── [★★★] double click
+  ├── [GAP] crash after provider accept                   └── [GAP] password on public URL
+[+] isolation                                             [+] Second account
+  └── [★★★] onPromptBuild                                 └── [★★★] isolation CI
+LLM live path: [GAP] [→EVAL] draft quality — nightly later
+COVERAGE: merge gate 4 paths | GAPS: re-score, crash-after-send, live eval
+```
+
+## Worktree parallelization
+
+| Step | Modules | Depends on |
+| --- | --- | --- |
+| Schema + leases + claims | packages/contract, migrations | — |
+| Worker HTTP + policy | packages/loop | Schema |
+| Email channel | packages/channels | Schema |
+| Cockpit | apps/cockpit | Worker HTTP |
+| Packs + replay | packs/, apps/cli | Schema |
+| Image + CI | deploy/ | Worker + cockpit |
+
+Lane A: schema → worker HTTP → email
+Lane B: packs + replay (after schema)
+Lane C: cockpit (after worker HTTP contract)
+Then image + CI.
+
+Conflict: Lane A and B both touch `packages/contract` — keep contract in A first.
+
+## Implementation Tasks
+
+Synthesized from this review. Checkbox as you ship.
+
+- [x] **T1 (P1, human: ~4h / CC: ~25min)** — schema — Postgres migrations: ledger, checkpointer prefix, leases, claims, unique fixtureId, sendId/sending
+  - Surfaced by: Architecture — SQLite leftover vs locked Postgres
+  - Files: `migrations/`, `packages/contract/`
+  - Verify: `pnpm test` against CI Postgres
+- [x] **T2 (P1, human: ~2h / CC: ~15min)** — worker — claim signal, lease heartbeat, control token, localhost bind
+  - Surfaced by: Architecture — replica holes
+  - Files: `packages/loop/`
+  - Verify: two-worker test doubles do not double-draft
+- [x] **T3 (P1, human: ~2h / CC: ~15min)** — send — idempotent Approve + `sending`/`sent`
+  - Surfaced by: Code quality — double Approve
+  - Files: `packages/loop/`, `packages/channels/email`
+  - Verify: double-Approve mock
+- [x] **T4 (P1, human: ~2h / CC: ~15min)** — cockpit — proxy + password off localhost
+  - Surfaced by: Outside voice — public Approve URL
+  - Files: `apps/cockpit/`
+  - Verify: unauthenticated Approve 401 off localhost
+- [x] **T5 (P2, human: ~1h / CC: ~10min)** — config — STATION_DATABASE_URL vs PACK_DATABASE_URL, policy file, STATION_MASTER_KEY
+  - Surfaced by: Outside voice — over-claimed DATABASE_URL
+  - Files: `station.config.ts`, `.env.example`, `docs/DEPLOY.md`
+  - Verify: pack SQL cannot SELECT station tables
+- [x] **T6 (P2, human: ~3h / CC: ~20min)** — Pack.draft + recorded replay CI + compose smoke
+  - Surfaced by: Tests — merge gate
+  - Files: `packs/`, `apps/cli/`, `.github/workflows/`
+  - Verify: Actions green on `dev`
+- [x] **T7 (P1, human: ~1 week / CC: ~4h)** — email — Microsoft Graph channel after Gmail/IMAP park-and-send
+  - Surfaced by: TODOS — user chose build-in-train not defer
+  - Files: `packages/channels/email/graph.ts`, `docs/FIRST_RUN.md`
+  - Verify: isolation test + commitSend mock for Graph
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | Codex not installed; Claude outside voice used |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR | 8 issues locked, 0 critical gaps open from this review |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **VERDICT:** ENG CLEARED — ready to implement. CEO review not run.
+NO UNRESOLVED DECISIONS
+
