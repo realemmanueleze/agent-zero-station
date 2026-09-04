@@ -12,6 +12,9 @@ export function shouldApplyLedgerSql(url: string): boolean {
   if (url === "postgres://station/db" || url === "postgres://pack/db") {
     return false;
   }
+  if (url.startsWith("memory://") || url.includes("://persist/") || url.startsWith("postgres://persist")) {
+    return false;
+  }
   return true;
 }
 

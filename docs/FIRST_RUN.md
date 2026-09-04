@@ -20,4 +20,6 @@ The worker binds 127.0.0.1:19174. The Next.js cockpit proxies Approve so the bro
 
 Isolation: tenant A prompts never include tenant B. Each live mailbox is its own `account`.
 
+Set `STATION_DATABASE_URL`. Two workers that share that catalog share the vault and the park list. No catalog means Add source dies when the process exits.
+
 See [DEPLOY.md](DEPLOY.md) for Compose and a cloud VM.

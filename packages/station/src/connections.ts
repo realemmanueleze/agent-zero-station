@@ -12,6 +12,7 @@ import {
 } from "@station/channels";
 import { catalogEquals } from "./catalog.ts";
 import { fixtureInbound, type ProducedEmail } from "./email-producer.ts";
+import { getSharedLedger } from "./ledger.ts";
 import {
   connectionAad,
   decryptWithRotation,
@@ -83,9 +84,13 @@ function isTestRuntime(): boolean {
 }
 
 export class ConnectionStore {
-  private readonly rows = new Map<string, ConnectionRow>();
+  private readonly local = new Map<string, ConnectionRow>();
 
   constructor(private readonly env: () => Record<string, string | undefined>) {}
+
+  private get rows(): Map<string, ConnectionRow> {
+    return getSharedLedger(this.env().STATION_DATABASE_URL)?.connections ?? this.local;
+  }
 
   list(): ConnectionPublic[] {
     return [...this.rows.values()]
