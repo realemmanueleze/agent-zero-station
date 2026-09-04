@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@station/observability": ["./packages/observability/src/index.ts"],
+      "@station/api": ["./packages/station/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages",
+    "evals",
+    "tests",
+    "vitest.config.ts",
+    "vitest.eval.config.ts",
+    "vitest.tickets.config.ts"
+  ]
+}
