@@ -816,6 +816,37 @@ export class Station implements StationApi {
     this.pollers.set(producerRef, timer);
   }
 
+  private activityRows(): Array<{
+    id: string;
+    action: string;
+    account: string;
+    detail: string;
+    channel: string;
+  }> {
+    return [...this.decisions.values()].map((row) => ({
+      id: `decision-${row.id}`,
+      action: row.state,
+      account: row.account ?? row.tenantId,
+      detail: row.subject ?? row.body ?? row.id,
+      channel: row.kind ?? "email",
+    }));
+  }
+
+  private briefText(query: string): string {
+    const rows = this.activityRows();
+    const parked = [...this.decisions.values()].filter((row) => row.state === "parked");
+    const needle = query.trim().toLowerCase();
+    const hits = needle
+      ? rows.filter((row) => `${row.detail} ${row.account} ${row.action}`.toLowerCase().includes(needle))
+      : rows;
+    return [
+      "Workspace brief",
+      query ? `Query “${query}” hit ${hits.length} ledger rows.` : "No query. Whole workspace.",
+      `${parked.length} waiting on a human.`,
+      hits[0]?.detail ?? "none",
+    ].join("\n");
+  }
+
   private stopPollers(): void {
     for (const timer of this.pollers.values()) {
       clearInterval(timer);
@@ -980,6 +1011,15 @@ export class Station implements StationApi {
             write(200, edited);
             return;
           }
+        }
+        if (path.startsWith("/activity") && req.method === "GET") {
+          write(200, { items: this.activityRows() });
+          return;
+        }
+        if (path.startsWith("/brief") && req.method === "GET") {
+          const query = parsed.searchParams.get("q") ?? "";
+          write(200, { brief: this.briefText(query) });
+          return;
         }
         if (path.startsWith("/park")) {
           const listed = await this.cockpit.parkList({ host: "127.0.0.1" });

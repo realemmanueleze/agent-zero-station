@@ -25,6 +25,7 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T18 | Deep Agents live tool table | `tests/tickets/T18-deep-agents.test.ts` | `evals/suites/loop.deep-agents.eval.ts` |
 | T19 | Microsoft Graph live poll and send | `tests/tickets/T19-graph-live.test.ts` | `evals/suites/graph.live.eval.ts` |
 | T20 | Slack, vault, pack SQL, MCP live adapters | `tests/tickets/T20-live-adapters.test.ts` | `evals/suites/adapters.live.eval.ts` |
+| T21 | Activity and Brief read the ledger | `tests/tickets/T21-ledger-cockpit.test.ts` | `evals/suites/cockpit.ledger-views.eval.ts` |
 
 Branch history for T3 (and every later ticket):
 
