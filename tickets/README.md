@@ -23,6 +23,7 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T16 | Vault + park survive restart | `tests/tickets/T16-persist.test.ts` | `evals/suites/persist.restart.eval.ts` |
 | T17 | Continuous email poller | `tests/tickets/T17-email-poller.test.ts` | `evals/suites/email.poller.eval.ts` |
 | T18 | Deep Agents live tool table | `tests/tickets/T18-deep-agents.test.ts` | `evals/suites/loop.deep-agents.eval.ts` |
+| T19 | Microsoft Graph live poll and send | `tests/tickets/T19-graph-live.test.ts` | `evals/suites/graph.live.eval.ts` |
 
 Branch history for T3 (and every later ticket):
 

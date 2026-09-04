@@ -12,7 +12,7 @@ import {
 } from "@station/observability";
 import { getPack, type PackScore, type PackSignal } from "@station/packs";
 import { runScoringTurn, scoringTurnCallsCommitSend } from "@station/loop";
-import { mailboxesFromConfig } from "@station/channels";
+import { mailboxesFromConfig, normalizeGraphMessage } from "@station/channels";
 import { catalogEquals } from "./catalog.ts";
 import { approveWithConnection, ConnectionStore, handleVaultRequest } from "./connections.ts";
 import type { ProducedEmail } from "./email-producer.ts";
@@ -755,23 +755,7 @@ export class Station implements StationApi {
   };
 
   graph: StationApi["graph"] = {
-    normalizeSignal: (message) => {
-      const raw = message as {
-        from?: { emailAddress?: { address?: string } };
-        conversationId?: string;
-        subject?: string;
-        body?: { content?: string };
-      };
-      const text = raw.body?.content ?? "";
-      const amountMatch = text.match(/\$(\d+)/);
-      return {
-        from: raw.from?.emailAddress?.address ?? "",
-        threadId: raw.conversationId ?? "",
-        subject: raw.subject ?? "",
-        text,
-        amount: amountMatch ? Number(amountMatch[1]) : undefined,
-      };
-    },
+    normalizeSignal: (message) => normalizeGraphMessage(message),
     promptBuffer: async (tenantId) => this.promptByTenant.get(tenantId) ?? "",
     commitSend: async (input) => {
       this.sendIds.add(input.sendId);
