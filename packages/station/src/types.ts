@@ -62,7 +62,9 @@ export type StationApi = {
     }) => Promise<{ status: number; json: unknown; logs: string[] }>;
     claimSignal: (signalId: string, packId: string, workerId: string) => Promise<void>;
     startProducer: (producerRef: string, workerId: string) => Promise<{ started: boolean }>;
+    startLiveProducers: (workerId: string) => Promise<{ started: number; skipped: number }>;
     producerStartCount: (producerRef: string) => Promise<number>;
+    producerTickCount: (producerRef: string) => Promise<number>;
   };
   send: {
     approve: (decisionId: string) => Promise<Receipt>;

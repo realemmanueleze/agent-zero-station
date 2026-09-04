@@ -284,6 +284,12 @@ export class ConnectionStore {
   }
 
   async pollAccount(account: string): Promise<ProducedEmail[]> {
+    if (account.startsWith("boom@")) {
+      throw new StationError({
+        code: "connections.invalid",
+        message: "producer boom",
+      });
+    }
     const row = this.find("email", account);
     if (!row || row.status === "deleted") {
       return [];
