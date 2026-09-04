@@ -1,5 +1,13 @@
 # Agent Zero
 
+## Engineering law
+
+Read [docs/ENGINEERING.md](docs/ENGINEERING.md) before writing feature code.
+
+- Tests and evals are written first. Program code exists to turn those red suites green.
+- Throw only `StationError`. Log only through `@station/observability`. Redact secrets and mail bodies.
+- Ticket order: T0 observability (done as the shared layer) → T1 schema → T2 worker → T3 send → T4 cockpit → T5 config → T6 replay → T7 Graph.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.

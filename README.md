@@ -13,6 +13,16 @@ This repo is not [frdel/agent-zero](https://github.com/frdel/agent-zero). That i
 
 [docs/designs/agent-zero-station-kit.md](docs/designs/agent-zero-station-kit.md)
 
+## How we build
+
+Tests and evals come first. Code is written to pass them. Errors are `StationError`. Logs are JSON through `@station/observability`. See [docs/ENGINEERING.md](docs/ENGINEERING.md) and [tickets/](tickets/).
+
+```bash
+pnpm test          # T0 + inventory (green)
+pnpm test:tickets  # T1–T7 contracts (red until each ticket)
+pnpm eval:recorded # merge-gate evals (red until those tickets)
+```
+
 ## Local ports
 
 Cockpit `19173`. Worker `19174`. Override with `STATION_COCKPIT_PORT` and `STATION_WORKER_PORT`.
