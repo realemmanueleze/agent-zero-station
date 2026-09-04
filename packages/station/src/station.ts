@@ -97,6 +97,8 @@ export class Station implements StationApi {
   private sendIds = new Set<string>();
   private providerCalls = new Map<string, number>();
   private producerStarts = new Map<string, number>();
+  private producerTicks = new Map<string, number>();
+  private pollers = new Map<string, ReturnType<typeof setInterval>>();
   private promptByTenant = new Map<string, string>();
   private approveLogLines: string[] = [];
   private workerLogs: string[] = [];
@@ -428,6 +430,7 @@ export class Station implements StationApi {
         port,
         close: () =>
           new Promise<void>((resolve, reject) => {
+            this.stopPollers();
             server.close((err) => (err ? reject(err) : resolve()));
           }),
       };
@@ -494,13 +497,8 @@ export class Station implements StationApi {
           return { started: false };
         }
         this.producerStarts.set(producerRef, 1);
-        if (producerRef.startsWith("email:")) {
-          const account = producerRef.slice("email:".length);
-          const produced = await this.connectionStore.pollAccount(account);
-          for (const msg of produced) {
-            this.parkProduced(msg);
-          }
-        }
+        await this.pollProducer(producerRef);
+        this.armPoller(producerRef);
         return { started: true };
       };
       const pending = this.claimChain.then(run, run);
@@ -510,8 +508,33 @@ export class Station implements StationApi {
       );
       return pending;
     },
+    startLiveProducers: async (workerId) => {
+      const live = this.connectionStore
+        .list()
+        .filter((row) => row.kind === "email" && row.status === "live");
+      const cap = stationConfig.mailProducerCap;
+      let started = 0;
+      let skipped = 0;
+      for (const row of live) {
+        if (started >= cap) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          const result = await this.worker.startProducer(`email:${row.account}`, workerId);
+          if (result.started) {
+            started += 1;
+          }
+        } catch {
+          // one mailbox must not take the others down
+        }
+      }
+      return { started, skipped };
+    },
     producerStartCount: async (producerRef) =>
       this.producerStarts.get(producerRef) ?? 0,
+    producerTickCount: async (producerRef) =>
+      this.producerTicks.get(producerRef) ?? 0,
   };
 
   send: StationApi["send"] = {
@@ -780,6 +803,41 @@ export class Station implements StationApi {
       return { providerCalls: this.providerCalls.get(receipt.sendId) ?? 0 };
     },
   };
+
+  private pollMs(): number {
+    const raw = Number(this.env.STATION_POLL_MS ?? 30_000);
+    return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
+  }
+
+  private async pollProducer(producerRef: string): Promise<void> {
+    if (!producerRef.startsWith("email:")) {
+      this.producerTicks.set(producerRef, (this.producerTicks.get(producerRef) ?? 0) + 1);
+      return;
+    }
+    const account = producerRef.slice("email:".length);
+    const produced = await this.connectionStore.pollAccount(account);
+    for (const msg of produced) {
+      this.parkProduced(msg);
+    }
+    this.producerTicks.set(producerRef, (this.producerTicks.get(producerRef) ?? 0) + 1);
+  }
+
+  private armPoller(producerRef: string): void {
+    if (this.pollers.has(producerRef)) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void this.pollProducer(producerRef).catch(() => undefined);
+    }, this.pollMs());
+    this.pollers.set(producerRef, timer);
+  }
+
+  private stopPollers(): void {
+    for (const timer of this.pollers.values()) {
+      clearInterval(timer);
+    }
+    this.pollers.clear();
+  }
 
   private async persistLedger(): Promise<void> {
     const url = this.env.STATION_DATABASE_URL;

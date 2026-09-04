@@ -9,4 +9,5 @@ export const stationConfig = {
   obsidian: [{ id: "vault/acme" }],
   db: { urlEnv: "PACK_DATABASE_URL" },
   mcp: [{ name: "docs", command: "npx", args: ["-y", "some-mcp"] }],
+  mailProducerCap: 25,
 };
