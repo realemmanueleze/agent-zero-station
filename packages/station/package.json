@@ -9,6 +9,7 @@
     "@station/channels": "workspace:*",
     "@station/loop": "workspace:*",
     "@station/observability": "workspace:*",
-    "@station/packs": "workspace:*"
+    "@station/packs": "workspace:*",
+    "pg": "^8.16.3"
   }
 }

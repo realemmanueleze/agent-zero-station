@@ -30,4 +30,4 @@ One service from the Dockerfile. Volume for `/data`. Secrets: `STATION_MASTER_KE
 
 SQLite-on-Cloud-Run is a poor fit. Prefer a VM, Fly, or Railway for stateful `/data`. If you still use Cloud Run, mount a volume and treat restarts as ledger loss unless that volume is durable.
 
-`STATION_DATABASE_URL` is the ledger. `PACK_DATABASE_URL` is optional pack SQL. Never the same catalog.
+`STATION_DATABASE_URL` is the ledger and the vault. `PACK_DATABASE_URL` is optional pack SQL. Never the same catalog. Restart the station on the same catalog and Add source plus parked cards are still there.

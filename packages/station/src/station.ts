@@ -18,6 +18,8 @@ import { approveWithConnection, ConnectionStore, handleVaultRequest } from "./co
 import type { ProducedEmail } from "./email-producer.ts";
 import { CONFIG_READ_KEYS } from "./keys.ts";
 import { stationConfig } from "./station-config.ts";
+import { getSharedLedger } from "./ledger.ts";
+import { flushLedgerToSql, hydrateLedgerFromSql } from "./persist-sql.ts";
 import { applyLedgerMigration } from "./postgres.ts";
 import type {
   EmailPayload,
@@ -179,6 +181,11 @@ export class Station implements StationApi {
         });
       }
       await applyLedgerMigration(url);
+      const shared = getSharedLedger(url);
+      if (shared) {
+        await hydrateLedgerFromSql(url, shared);
+      }
+      this.attachLedger();
       this.migrated = true;
     },
     migrateAgain: async () => {
@@ -349,6 +356,7 @@ export class Station implements StationApi {
         });
         this.sendIds.add(`send-${row.fixtureId}`);
       }
+      await this.persistLedger();
     },
   };
 
@@ -369,6 +377,7 @@ export class Station implements StationApi {
         });
       }
       this.env = { ...this.env, ...env };
+      this.attachLedger();
       return { ...this.env };
     },
     dump: (env) => {
@@ -533,6 +542,7 @@ export class Station implements StationApi {
         }
         await this.callProvider(row.sendId, false);
         row.state = "sent";
+        await this.persistLedger();
         return { sendId: row.sendId };
       }),
     commitSend: async (input) => {
@@ -562,6 +572,7 @@ export class Station implements StationApi {
         case "parked":
         case "sending":
           row.state = "dropped";
+          await this.persistLedger();
           return;
         case "sent":
           throw new StationError({
@@ -578,6 +589,7 @@ export class Station implements StationApi {
       const row = this.requireDecision(decisionId);
       row.body = beforePark(body);
       row.state = "parked";
+      await this.persistLedger();
       return { state: row.state, body: row.body };
     },
     decisionState: async (decisionId) => this.requireDecision(decisionId).state,
@@ -769,6 +781,44 @@ export class Station implements StationApi {
     },
   };
 
+  private async persistLedger(): Promise<void> {
+    const url = this.env.STATION_DATABASE_URL;
+    const shared = getSharedLedger(url);
+    if (!url || !shared) {
+      return;
+    }
+    await flushLedgerToSql(url, shared);
+  }
+
+  private attachLedger(): void {
+    const shared = getSharedLedger(this.env.STATION_DATABASE_URL);
+    if (!shared) {
+      return;
+    }
+    if (shared.decisions.size === 0) {
+      for (const [id, row] of this.decisions) {
+        shared.decisions.set(id, row);
+      }
+      for (const [id, row] of this.signals) {
+        shared.signals.set(id, row);
+      }
+      for (const [id, row] of this.claims) {
+        shared.claims.set(id, row);
+      }
+      for (const [id, row] of this.leases) {
+        shared.leases.set(id, row);
+      }
+      for (const sendId of this.sendIds) {
+        shared.sendIds.add(sendId);
+      }
+    }
+    this.decisions = shared.decisions;
+    this.signals = shared.signals;
+    this.claims = shared.claims;
+    this.leases = shared.leases;
+    this.sendIds = shared.sendIds;
+  }
+
   private parkProduced(msg: ProducedEmail): void {
     const id = `prod-${msg.account}-${Date.now()}`;
     this.decisions.set(id, {
@@ -785,6 +835,7 @@ export class Station implements StationApi {
       subject: msg.subject,
     });
     this.sendIds.add(`send-${id}`);
+    void this.persistLedger();
   }
 
   private requireDecision(id: string): Decision {
@@ -864,6 +915,7 @@ export class Station implements StationApi {
             redirect,
           })
         ) {
+          await this.persistLedger();
           return;
         }
         const parkAction = path.match(/^\/park\/([^/]+)\/(approve|edit|kill)/);
