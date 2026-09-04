@@ -1,4 +1,4 @@
-import type { Connection, ParkItem } from "../ui/types.ts";
+import type { ActivityEvent, ChannelKind, Connection, ParkItem } from "../ui/types.ts";
 
 const workerUrl = () => process.env.STATION_WORKER_URL ?? "http://127.0.0.1:19174";
 const controlToken = () => process.env.STATION_CONTROL_TOKEN ?? "dev-control-token";
@@ -46,6 +46,55 @@ export async function workerFetch(
 export async function listParkItems(): Promise<ParkItem[]> {
   const loaded = await loadPark();
   return loaded.items;
+}
+
+export function mapWorkerActivity(
+  rows: Array<{
+    id?: string;
+    action?: string;
+    account?: string;
+    detail?: string;
+    channel?: string;
+    at?: string;
+    signalId?: string;
+  }>,
+): ActivityEvent[] {
+  return rows.map((row) => ({
+    id: row.id ?? "decision-unknown",
+    at: row.at ?? "",
+    channel: (row.channel as ChannelKind) ?? "email",
+    account: row.account ?? "",
+    action: row.action ?? "",
+    signalId: row.signalId ?? row.id ?? "",
+    detail: row.detail ?? "",
+  }));
+}
+
+export async function loadActivity(): Promise<ActivityEvent[]> {
+  try {
+    const res = await workerFetch("/activity");
+    if (!res.ok) {
+      return [];
+    }
+    const json = (await res.json()) as { items?: Parameters<typeof mapWorkerActivity>[0] };
+    return mapWorkerActivity(json.items ?? []);
+  } catch {
+    return [];
+  }
+}
+
+export async function loadBrief(query = ""): Promise<string> {
+  try {
+    const path = query ? `/brief?q=${encodeURIComponent(query)}` : "/brief";
+    const res = await workerFetch(path);
+    if (!res.ok) {
+      return "";
+    }
+    const json = (await res.json()) as { brief?: string };
+    return json.brief ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export async function loadPark(): Promise<{ items: ParkItem[]; workerUp: boolean }> {
