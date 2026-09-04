@@ -24,6 +24,8 @@ Docker, a hostname, TLS (Caddy). DNS A record, ports 80/443, `/data` disk. Set `
 
 ## Fly.io / Railway
 
+`fly.toml` is in the repo. `fly launch` then set secrets and a volume for `/data`. Tagged pushes publish `ghcr.io/<owner>/<repo>:<tag>` via `.github/workflows/release.yml`.
+
 One service from the Dockerfile. Volume for `/data`. Secrets: `STATION_MASTER_KEY`, `STATION_CONTROL_TOKEN`, `STATION_COCKPIT_PASSWORD`, `GOOGLE_OAUTH_CLIENT_ID` if you use Gmail API.
 
 ## Cloud Run
