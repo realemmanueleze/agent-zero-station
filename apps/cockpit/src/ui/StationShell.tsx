@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { commandActions, dispatchCommand } from "./commands.ts";
+import { PRIVACY_HREF } from "./privacy.ts";
 import { subscribeWaiting } from "./waiting.ts";
 
 const links = [
@@ -143,6 +144,9 @@ export function StationShell({
         <div className="top-actions">
           <a className="pack" href="/accounts">
             Accounts
+          </a>
+          <a className="pack" href={PRIVACY_HREF}>
+            Privacy
           </a>
           <button type="button" onClick={() => setPalette(true)}>
             Command ⌘K

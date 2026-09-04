@@ -12,6 +12,6 @@
 
 **Effort:** L
 **Priority:** P2
-**Depends on:** T15 Add source landed; a public privacy policy URL
+**Depends on:** T15 Add source landed; `/privacy` ships in the kit. Point Google at `https://<your-host>/privacy`.
 
 ## Completed
