@@ -22,6 +22,6 @@ Isolation: tenant A prompts never include tenant B. Each live mailbox is its own
 
 Set `STATION_DATABASE_URL`. Two workers that share that catalog share the vault and the park list. No catalog means Add source dies when the process exits.
 
-Live email connections poll on an interval (`STATION_POLL_MS`, default 30s). Cap 25 mailboxes. One dead box does not stop the others.
+Live email connections poll on an interval (`STATION_POLL_MS`, default 30s). Cap 25 mailboxes. `pnpm dev` starts those pollers on boot. One dead box does not stop the others.
 
 See [DEPLOY.md](DEPLOY.md) for Compose and a cloud VM.

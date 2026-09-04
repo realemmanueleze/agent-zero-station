@@ -852,6 +852,12 @@ export class Station implements StationApi {
       clearInterval(timer);
     }
     this.pollers.clear();
+    for (const producerRef of this.producerStarts.keys()) {
+      const lease = this.leases.get(producerRef);
+      if (lease) {
+        lease.heartbeatAt = Date.now() - 31_000;
+      }
+    }
   }
 
   private async persistLedger(): Promise<void> {

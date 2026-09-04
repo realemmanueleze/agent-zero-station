@@ -104,6 +104,7 @@ export async function startWorker(
     token,
     port: options.workerPort ?? 0,
   });
+  await station.worker.startLiveProducers("boot");
 
   return {
     station,
