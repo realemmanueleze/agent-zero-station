@@ -64,6 +64,9 @@ importers:
       '@station/observability':
         specifier: workspace:*
         version: link:../observability
+      nodemailer:
+        specifier: ^7.0.13
+        version: 7.0.13
 
   packages/loop:
     dependencies:
@@ -801,6 +804,10 @@ packages:
         optional: true
       sass:
         optional: true
+
+  nodemailer@7.0.13:
+    resolution: {integrity: sha512-PNDFSJdP+KFgdsG3ZzMXCgquO7I6McjY2vlqILjtJd0hy8wEvtugS9xKRF2NWlPNGxvLCXlTNIae4serI7dinw==}
+    engines: {node: '>=6.0.0'}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -1562,6 +1569,8 @@ snapshots:
       - '@babel/core'
       - '@types/node'
       - babel-plugin-macros
+
+  nodemailer@7.0.13: {}
 
   pathe@2.0.3: {}
 

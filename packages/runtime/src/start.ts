@@ -91,7 +91,7 @@ export async function startWorker(
     STATION_MASTER_KEY:
       options.env?.STATION_MASTER_KEY ??
       process.env.STATION_MASTER_KEY ??
-      "dev-master-key-not-for-prod",
+      "dev-master-key-not-for-prod!!!!!",
   });
   await station.schema.migrate();
   const fixturePath = options.fixturePath ?? join(process.cwd(), "fixtures/demo.jsonl");

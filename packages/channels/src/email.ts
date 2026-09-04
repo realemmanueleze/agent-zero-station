@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { createLogger, StationError } from "@station/observability";
 
 export type EmailDraft = {
@@ -53,31 +54,81 @@ export function createMemoryTransport(opts?: {
   };
 }
 
+export type SmtpFields = {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  tls?: boolean;
+};
+
+export async function verifySmtpFields(fields: SmtpFields): Promise<void> {
+  const transporter = nodemailer.createTransport({
+    host: fields.host,
+    port: fields.port,
+    secure: Boolean(fields.tls && fields.port === 465),
+    auth: { user: fields.user, pass: fields.pass },
+  });
+  await transporter.verify();
+}
+
+export function createSmtpTransportFromFields(fields: SmtpFields): EmailTransport {
+  return {
+    async send(draft) {
+      const transporter = nodemailer.createTransport({
+        host: fields.host,
+        port: fields.port,
+        secure: fields.tls ?? false,
+        auth: { user: fields.user, pass: fields.pass },
+      });
+      const info = await transporter.sendMail({
+        from: draft.from ?? fields.user,
+        to: draft.to,
+        subject: draft.subject ?? "Station draft",
+        text: draft.body,
+      });
+      return { providerId: info.messageId ?? `smtp-${draft.to}` };
+    },
+  };
+}
+
 export function createSmtpTransport(env: Record<string, string | undefined>): EmailTransport {
   const host = env.STATION_SMTP_HOST;
   const user = env.STATION_SMTP_USER;
   if (!host || !user) {
     return createMemoryTransport();
   }
+  return createSmtpTransportFromFields({
+    host,
+    port: Number(env.STATION_SMTP_PORT ?? 587),
+    user,
+    pass: env.STATION_SMTP_PASS ?? "",
+    tls: true,
+  });
+}
+
+export function createGmailApiTransport(input: {
+  accessToken: string;
+  refreshToken: string;
+}): EmailTransport {
   return {
     async send(draft) {
-      const nodemailer = (await import("nodemailer")) as {
-        createTransport: (opts: object) => {
-          sendMail: (opts: object) => Promise<{ messageId?: string }>;
-        };
-      };
-      const transporter = nodemailer.createTransport({
-        host,
-        port: Number(env.STATION_SMTP_PORT ?? 587),
-        auth: { user, pass: env.STATION_SMTP_PASS ?? "" },
+      const raw = Buffer.from(
+        `To: ${draft.to}\r\nSubject: ${draft.subject ?? "Station draft"}\r\n\r\n${draft.body}`,
+      ).toString("base64url");
+      const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${input.accessToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ raw }),
       });
-      const info = await transporter.sendMail({
-        from: draft.from ?? env.STATION_EMAIL_FROM ?? user,
-        to: draft.to,
-        subject: draft.subject ?? "Station draft",
-        text: draft.body,
-      });
-      return { providerId: info.messageId ?? `smtp-${draft.to}` };
+      if (!res.ok) {
+        throw new Error("gmail send failed");
+      }
+      const json = (await res.json()) as { id?: string };
+      return { providerId: json.id ?? `gmail-${draft.to}` };
     },
   };
 }
