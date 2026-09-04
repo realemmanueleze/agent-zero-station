@@ -132,8 +132,8 @@ export function itemsForConnection(items: ParkItem[], kind: ChannelKind, account
   });
 }
 
-export function buildActivity(items: ParkItem[]): ActivityEvent[] {
-  const fromItems: ActivityEvent[] = items.map((item) => ({
+export function activityFromLedger(items: ParkItem[]): ActivityEvent[] {
+  return items.map((item) => ({
     id: `decision-${item.id}`,
     at: "2026-01-01T00:00:00Z",
     channel: inferChannel(item),
@@ -142,6 +142,13 @@ export function buildActivity(items: ParkItem[]): ActivityEvent[] {
     signalId: item.id,
     detail: item.subject ?? item.body ?? item.id,
   }));
+}
+
+export function buildActivity(items: ParkItem[], opts?: { seeds?: boolean }): ActivityEvent[] {
+  const fromItems = activityFromLedger(items);
+  if (opts?.seeds === false) {
+    return fromItems;
+  }
   const seed: ActivityEvent[] = [
     {
       id: "log-slack-1",
