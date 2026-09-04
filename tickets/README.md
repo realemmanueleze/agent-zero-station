@@ -22,6 +22,7 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T15 | Encrypted Add source for every kind | `tests/tickets/T15-connections.test.ts` | `evals/suites/connections.add-source.eval.ts` |
 | T16 | Vault + park survive restart | `tests/tickets/T16-persist.test.ts` | `evals/suites/persist.restart.eval.ts` |
 | T17 | Continuous email poller | `tests/tickets/T17-email-poller.test.ts` | `evals/suites/email.poller.eval.ts` |
+| T18 | Deep Agents live tool table | `tests/tickets/T18-deep-agents.test.ts` | `evals/suites/loop.deep-agents.eval.ts` |
 
 Branch history for T3 (and every later ticket):
 

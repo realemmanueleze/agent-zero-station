@@ -1,4 +1,5 @@
 import { getPack, type PackId, type PackSignal } from "@station/packs";
+import { LIVE_TOOL_NAMES, liveToolsIncludeCommitSend } from "./tools.ts";
 
 export type ScoringTurn = {
   packId: PackId;
@@ -8,18 +9,17 @@ export type ScoringTurn = {
   tools: string[];
 };
 
-const LIVE_TOOLS = [
-  "read_signal",
-  "search_ledger",
-  "draft_reply",
-  "query_db",
-  "vault_search",
-  "escalate",
-  "drop",
-];
+export {
+  LIVE_TOOL_NAMES,
+  buildLivePrompt,
+  isLiveTool,
+  liveToolsIncludeCommitSend,
+  pickWinner,
+  winnerState,
+} from "./tools.ts";
 
 export function scoringTurnCallsCommitSend(): boolean {
-  return LIVE_TOOLS.includes("commit_send");
+  return liveToolsIncludeCommitSend();
 }
 
 export function runScoringTurn(packId: string, signal: PackSignal): ScoringTurn {
@@ -37,6 +37,17 @@ export function runScoringTurn(packId: string, signal: PackSignal): ScoringTurn 
     state,
     body,
     scores,
-    tools: [...LIVE_TOOLS],
+    tools: [...LIVE_TOOL_NAMES],
   };
+}
+
+export function runLiveTurn(
+  packId: string,
+  signal: PackSignal,
+  opts?: { modelKey?: string },
+): ScoringTurn {
+  if (opts?.modelKey) {
+    return runScoringTurn(packId, signal);
+  }
+  return runScoringTurn(packId, signal);
 }
