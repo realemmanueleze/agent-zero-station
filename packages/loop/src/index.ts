@@ -1,5 +1,11 @@
 import { getPack, type PackId, type PackSignal } from "@station/packs";
-import { LIVE_TOOL_NAMES, liveToolsIncludeCommitSend } from "./tools.ts";
+import {
+  LIVE_TOOL_NAMES,
+  executeLiveTools,
+  liveToolsIncludeCommitSend,
+  type LiveToolAdapters,
+  type LiveToolTrace,
+} from "./tools.ts";
 
 export type ScoringTurn = {
   packId: PackId;
@@ -7,16 +13,19 @@ export type ScoringTurn = {
   body: string;
   scores: ReturnType<ReturnType<typeof getPack>["score"]>;
   tools: string[];
+  traces?: LiveToolTrace[];
 };
 
 export {
   LIVE_TOOL_NAMES,
   buildLivePrompt,
+  executeLiveTools,
   isLiveTool,
   liveToolsIncludeCommitSend,
   pickWinner,
   winnerState,
 } from "./tools.ts";
+export type { LiveToolAdapters, LiveToolTrace } from "./tools.ts";
 
 export function scoringTurnCallsCommitSend(): boolean {
   return liveToolsIncludeCommitSend();
@@ -44,10 +53,14 @@ export function runScoringTurn(packId: string, signal: PackSignal): ScoringTurn 
 export function runLiveTurn(
   packId: string,
   signal: PackSignal,
-  opts?: { modelKey?: string },
+  opts?: { modelKey?: string; adapters?: LiveToolAdapters },
 ): ScoringTurn {
-  if (opts?.modelKey) {
-    return runScoringTurn(packId, signal);
-  }
-  return runScoringTurn(packId, signal);
+  const turn = runScoringTurn(packId, signal);
+  const traces = executeLiveTools({
+    signal,
+    state: turn.state,
+    draft: turn.body,
+    adapters: opts?.adapters,
+  });
+  return { ...turn, traces };
 }
