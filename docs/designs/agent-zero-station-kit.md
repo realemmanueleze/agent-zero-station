@@ -309,7 +309,7 @@ Job daily 03:00 local. Reads `outcomes`, writes `packs/<id>/proposals/YYYY-MM-DD
 
 1. **Local pnpm** — Node 22+, `pnpm i`, `cp .env.example .env`, `pnpm dev`. Open `http://127.0.0.1:19173`. Needs: nothing else.
 2. **Local Compose** — Docker 24+. `docker compose up`. Volumes `./data:/data`. Same URL. Needs: Docker only.
-3. **Generic Linux VM** — Docker, a public hostname, TLS terminator (Caddy or Caddy in Compose). Needs: DNS A record, ports 80/443, `/data` disk, OAuth redirect `https://<host>/oauth/callback` on the forker's Google/Azure app.
+3. **Generic Linux VM** — Docker, a public hostname, TLS terminator (Caddy or Caddy in Compose). Needs: DNS A record, ports 80/443, `/data` disk, OAuth redirect `https://<host>/oauth/google/callback` on the forker's Google/Azure app.
 4. **Fly.io** — `fly launch` from the provided `fly.toml`. Needs: Fly account, volume for `/data`, secrets (`GOOGLE_OAUTH_CLIENT_ID`, model key), redirect URL.
 5. **Railway** — one service from the Dockerfile. Needs: Railway account, volume, the same secrets and redirect.
 6. **Cloud Run** — image from GHCR, `--port 19173`, mounted volume or GCS-backed `/data` (if volume is unavailable, SQLite-on-Cloud-Run is a documented limitation: use a small VM instead). Needs: GCP project, Artifact Registry/GHCR pull, secrets, redirect.

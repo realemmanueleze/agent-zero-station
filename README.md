@@ -23,7 +23,7 @@ pnpm dev           # cockpit :19173, worker :19174
 pnpm test          # contracts + recorded evals
 ```
 
-Open http://127.0.0.1:19173/park. See [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
+Open http://127.0.0.1:19173/ for the action queue. Channels, activity, and brief sit next to it. See [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
 
 `docker compose up` is the same fixture park. Live IMAP/SMTP is in FIRST_RUN. MIT licensed.
 
