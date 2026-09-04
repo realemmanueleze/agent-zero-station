@@ -29,6 +29,7 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T22 | Learning proposals, fail-closed | `tests/tickets/T22-learning.test.ts` | `evals/suites/learning.proposals.eval.ts` |
 | T23 | Fly + GHCR on tag | `tests/tickets/T23-dist.test.ts` | `evals/suites/dist.release.eval.ts` |
 | T24 | Public privacy page | `tests/tickets/T24-privacy.test.ts` | `evals/suites/privacy.page.eval.ts` |
+| T25 | Boot starts live email producers | `tests/tickets/T25-boot-producers.test.ts` | `evals/suites/boot.producers.eval.ts` |
 
 Branch history for T3 (and every later ticket):
 
