@@ -10,7 +10,12 @@ import {
   toClientError,
   type Logger,
 } from "@station/observability";
+import { getPack, type PackScore, type PackSignal } from "@station/packs";
+import { runScoringTurn, scoringTurnCallsCommitSend } from "@station/loop";
+import { mailboxesFromConfig } from "@station/channels";
 import { CONFIG_READ_KEYS } from "./keys.ts";
+import { stationConfig } from "./station-config.ts";
+import { applyLedgerMigration } from "./postgres.ts";
 import type {
   EmailPayload,
   ParkItem,
@@ -64,7 +69,9 @@ function beforePark(body: string): string {
 }
 
 function draftBody(packId: string, signal: unknown, scores: unknown): string {
-  return `${packId}:${JSON.stringify(signal)}:${JSON.stringify(scores)}`;
+  const pack = getPack(packId);
+  const list = Array.isArray(scores) ? (scores as PackScore[]) : pack.score(signal as PackSignal);
+  return pack.draft(signal as PackSignal, list);
 }
 
 function isLocalHost(host: string): boolean {
@@ -157,6 +164,7 @@ export class Station implements StationApi {
           message: "migration failed",
         });
       }
+      await applyLedgerMigration(url);
       this.migrated = true;
     },
     migrateAgain: async () => {
@@ -549,7 +557,7 @@ export class Station implements StationApi {
     decisionState: async (decisionId) => this.requireDecision(decisionId).state,
     providerCallCount: async (sendId) => this.providerCalls.get(sendId) ?? 0,
     approveLogs: async () => [...this.approveLogLines],
-    scoringTurnCallsCommitSend: async () => false,
+    scoringTurnCallsCommitSend: async () => scoringTurnCallsCommitSend(),
   };
 
   cockpit: StationApi["cockpit"] = {
@@ -660,10 +668,23 @@ export class Station implements StationApi {
       }
       return ids.size;
     },
-    rescore: async (_signalIds, packId) => {
+    rescore: async (signalIds, packId) => {
       this.latestPackId = packId;
       for (const row of this.decisions.values()) {
+        const signal = this.signals.get(row.signalId ?? row.id);
+        const turn = runScoringTurn(packId, {
+          fixtureId: signal?.fixtureId ?? row.id,
+          text: signal?.text ?? row.body,
+          tenantId: row.tenantId,
+          from: row.from,
+          subject: row.subject,
+          amount: row.amount,
+        });
         row.packId = packId;
+        row.body = turn.body;
+        if (signalIds.includes(row.signalId ?? "") || signalIds.includes(row.id)) {
+          row.state = turn.state === "dropped" ? "dropped" : "parked";
+        }
       }
       return { packId };
     },
@@ -800,6 +821,24 @@ export class Station implements StationApi {
         if (url.startsWith("/park")) {
           const listed = await this.cockpit.parkList({ host: "127.0.0.1" });
           write(listed.status, listed.json);
+          return;
+        }
+        if (url.startsWith("/accounts") && req.method === "GET") {
+          write(200, { items: mailboxesFromConfig(stationConfig) });
+          return;
+        }
+        if (url.startsWith("/packs") && req.method === "GET") {
+          write(200, { items: ["sales", "inbox-triage"], active: this.latestPackId });
+          return;
+        }
+        const activate = url.match(/^\/packs\/([^/]+)\/activate/);
+        if (activate && req.method === "POST") {
+          const packId = decodeURIComponent(activate[1] ?? "sales");
+          await this.replay.rescore(
+            [...this.decisions.values()].map((row) => row.signalId ?? row.id),
+            packId,
+          );
+          write(200, { packId: this.latestPackId });
           return;
         }
         write(404, { error: { code: "invariant.unhandled", requestId } });

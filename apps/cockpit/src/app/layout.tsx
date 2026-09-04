@@ -23,6 +23,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+      <head>
+        <link rel="stylesheet" href="/station.theme.css" />
+      </head>
       <body>{children}</body>
     </html>
   );

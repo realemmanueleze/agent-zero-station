@@ -13,6 +13,15 @@ export default defineConfig({
       "@station/runtime": fileURLToPath(
         new URL("./packages/runtime/src/index.ts", import.meta.url),
       ),
+      "@station/packs": fileURLToPath(
+        new URL("./packages/packs/src/index.ts", import.meta.url),
+      ),
+      "@station/loop": fileURLToPath(
+        new URL("./packages/loop/src/index.ts", import.meta.url),
+      ),
+      "@station/channels": fileURLToPath(
+        new URL("./packages/channels/src/index.ts", import.meta.url),
+      ),
     },
   },
   esbuild: {

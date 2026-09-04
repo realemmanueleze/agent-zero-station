@@ -6,6 +6,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@station/observability": "workspace:*"
+    "@station/channels": "workspace:*",
+    "@station/loop": "workspace:*",
+    "@station/observability": "workspace:*",
+    "@station/packs": "workspace:*"
   }
 }

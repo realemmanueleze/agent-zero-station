@@ -180,6 +180,44 @@ export async function startStation(
           write(proxied.status, JSON.stringify(proxied.json), "application/json");
           return;
         }
+        if (url.pathname === "/accounts") {
+          const listed = await proxyWorker(workerPort, token, "/accounts", "GET");
+          const items =
+            listed.json && typeof listed.json === "object" && "items" in listed.json
+              ? (listed.json as { items: Array<{ id: string; transport: string }> }).items
+              : [];
+          write(
+            200,
+            `<!doctype html><html><body><h1>Accounts</h1><ul>${items
+              .map((row) => `<li>${row.transport} — ${row.id}</li>`)
+              .join("")}</ul></body></html>`,
+            "text/html; charset=utf-8",
+          );
+          return;
+        }
+        if (url.pathname === "/packs") {
+          const listed = await proxyWorker(workerPort, token, "/packs", "GET");
+          const body = listed.json as { items?: string[]; active?: string };
+          write(
+            200,
+            `<!doctype html><html><body><h1>Packs</h1><p>Active: ${body.active ?? "sales"}</p><ul>${(body.items ?? [])
+              .map((id) => `<li>pack: ${id}</li>`)
+              .join("")}</ul></body></html>`,
+            "text/html; charset=utf-8",
+          );
+          return;
+        }
+        const activatePack = url.pathname.match(/^\/packs\/([^/]+)\/activate$/);
+        if (activatePack && req.method === "POST") {
+          const proxied = await proxyWorker(
+            workerPort,
+            token,
+            `/packs/${encodeURIComponent(activatePack[1] ?? "")}/activate`,
+            "POST",
+          );
+          write(proxied.status, JSON.stringify(proxied.json), "application/json");
+          return;
+        }
         if (url.pathname === "/" || url.pathname === "/park") {
           const listed = await station.cockpit.parkList({ host: "127.0.0.1" });
           write(

@@ -28,8 +28,20 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(tsx@4.23.13)
 
+  apps/cli:
+    dependencies:
+      '@station/api':
+        specifier: workspace:*
+        version: link:../../packages/station
+
   apps/cockpit:
     dependencies:
+      '@station/channels':
+        specifier: workspace:*
+        version: link:../../packages/channels
+      '@station/packs':
+        specifier: workspace:*
+        version: link:../../packages/packs
       next:
         specifier: ^15.5.2
         version: 15.5.25(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -47,7 +59,24 @@ importers:
         specifier: ^19.1.9
         version: 19.2.7(@types/react@19.2.18)
 
+  packages/channels:
+    dependencies:
+      '@station/observability':
+        specifier: workspace:*
+        version: link:../observability
+
+  packages/loop:
+    dependencies:
+      '@station/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@station/packs':
+        specifier: workspace:*
+        version: link:../packs
+
   packages/observability: {}
+
+  packages/packs: {}
 
   packages/runtime:
     dependencies:
@@ -60,9 +89,18 @@ importers:
 
   packages/station:
     dependencies:
+      '@station/channels':
+        specifier: workspace:*
+        version: link:../channels
+      '@station/loop':
+        specifier: workspace:*
+        version: link:../loop
       '@station/observability':
         specifier: workspace:*
         version: link:../observability
+      '@station/packs':
+        specifier: workspace:*
+        version: link:../packs
 
 packages:
 

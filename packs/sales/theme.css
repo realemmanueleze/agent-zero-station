@@ -1,0 +1,4 @@
+/* Pack accent only. Do not hide Approve, Edit, or Kill. */
+:root {
+  --park-border: #d26a2c;
+}

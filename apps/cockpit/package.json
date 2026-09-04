@@ -9,6 +9,8 @@
     "start": "next start --hostname 127.0.0.1 --port 19173"
   },
   "dependencies": {
+    "@station/channels": "workspace:*",
+    "@station/packs": "workspace:*",
     "next": "^15.5.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

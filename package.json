@@ -9,7 +9,8 @@
     "test:watch": "vitest",
     "test:tickets": "vitest run --config vitest.tickets.config.ts",
     "eval:recorded": "vitest run --config vitest.eval.config.ts",
-    "eval:live": "echo 'nightly evals not wired yet' && exit 0"
+    "eval:live": "echo 'nightly evals not wired yet' && exit 0",
+    "replay": "tsx apps/cli/src/main.ts replay --mode recorded fixtures/sales-week.jsonl sales"
   },
   "dependencies": {
     "@station/runtime": "workspace:*"

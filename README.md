@@ -25,6 +25,8 @@ pnpm test          # contracts + recorded evals
 
 Open http://127.0.0.1:19173/park. See [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
 
+`docker compose up` is the same fixture park. Live IMAP/SMTP is in FIRST_RUN. MIT licensed.
+
 ## Local ports
 
 Cockpit `19173`. Worker `19174`. Override with `STATION_COCKPIT_PORT` and `STATION_WORKER_PORT`.

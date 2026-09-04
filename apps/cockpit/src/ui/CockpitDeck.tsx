@@ -174,6 +174,12 @@ export function CockpitDeck({
           </button>
         </nav>
         <div className="top-actions">
+          <a className="pack" href="/accounts">
+            Accounts
+          </a>
+          <a className="pack" href="/packs">
+            Packs
+          </a>
           <button type="button" onClick={() => setPalette(true)}>
             Command ⌘K
           </button>

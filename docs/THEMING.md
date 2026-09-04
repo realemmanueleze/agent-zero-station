@@ -3,8 +3,8 @@
 Load order:
 
 1. `apps/cockpit/tokens.css`
-2. `station.theme.css` at the install root, if present
-3. `packs/<id>/theme.css` when that pack is active
+2. `station.theme.css` at the install root, if present (`/station.theme.css`)
+3. `packs/<id>/theme.css` when that pack is active (`/packs/<id>/theme.css`)
 
 Override only CSS variables:
 

@@ -85,6 +85,10 @@ textarea:focus-visible {
   gap: 0.5rem;
 }
 
+.top-actions a {
+  text-decoration: none;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 16.5rem minmax(0, 1fr) 16.5rem;
