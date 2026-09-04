@@ -1,0 +1,11 @@
+{
+  "name": "@station/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "station": "./src/main.ts"
+  },
+  "dependencies": {
+    "@station/api": "workspace:*"
+  }
+}

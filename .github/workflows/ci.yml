@@ -20,3 +20,4 @@ jobs:
       - run: pnpm test
       - run: pnpm test:tickets
       - run: pnpm eval:recorded
+      - run: pnpm replay

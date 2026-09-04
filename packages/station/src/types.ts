@@ -49,7 +49,7 @@ export type StationApi = {
     mcpAllowed: (toolName: string, policy?: { allow?: string[] }) => boolean;
   };
   worker: {
-    listen: (opts: { host: string; token: string }) => Promise<{
+    listen: (opts: { host: string; token: string; port?: number }) => Promise<{
       port: number;
       close: () => Promise<void>;
     }>;

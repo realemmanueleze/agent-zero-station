@@ -12,6 +12,12 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T5 | Config + policy | `tests/tickets/T5-config.test.ts` | `evals/suites/policy.mcp-deny-send.eval.ts` |
 | T6 | Pack.draft + replay CI | `tests/tickets/T6-replay.test.ts` | `replay.sales-week`, `replay.pack-switch` |
 | T7 | Microsoft Graph channel | `tests/tickets/T7-graph.test.ts` | `evals/suites/graph.park-then-approve.eval.ts` |
+| T8 | First run: `pnpm dev` parks a fixture | `tests/tickets/T8-first-run.test.ts` | `evals/suites/first-run.park.eval.ts` |
+| T9 | Next.js cockpit primitives | `tests/tickets/T9-cockpit-next.test.ts` | `evals/suites/cockpit.next-park.eval.ts` |
+| T10 | Postgres SQL + packs + scoring loop | `tests/tickets/T10-spine.test.ts` | pack-switch eval stays green |
+| T11 | Email channel + fail-stays-parked | `tests/tickets/T11-email.test.ts` | `evals/suites/email.park-then-approve.eval.ts` |
+| T12 | `/accounts` and `/packs` | `tests/tickets/T12-cockpit-pages.test.ts` | `evals/suites/cockpit.accounts-packs.eval.ts` |
+| T13 | License, docs, Compose, smoke | `tests/tickets/T13-ship-kit.test.ts` | compose smoke |
 
 Branch history for T3 (and every later ticket):
 

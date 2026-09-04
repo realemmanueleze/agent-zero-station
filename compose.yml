@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: station
+      POSTGRES_PASSWORD: station
+      POSTGRES_DB: station
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U station"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  packdb:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pack
+      POSTGRES_PASSWORD: pack
+      POSTGRES_DB: pack
+    volumes:
+      - packdata:/var/lib/postgresql/data
+
+  station:
+    build: .
+    ports:
+      - "19173:19173"
+    environment:
+      STATION_DATABASE_URL: postgres://station:station@postgres:5432/station
+      PACK_DATABASE_URL: postgres://pack:pack@packdb:5432/pack
+      STATION_MASTER_KEY: dev-master-key-not-for-prod
+      STATION_CONTROL_TOKEN: dev-control-token
+    depends_on:
+      postgres:
+        condition: service_healthy
+      packdb:
+        condition: service_started
+    volumes:
+      - ./data:/data
+      - ./fixtures:/app/fixtures
+
+volumes:
+  pgdata:
+  packdata:

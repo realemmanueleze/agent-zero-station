@@ -9,11 +9,16 @@
     "verbatimModuleSyntax": true,
     "paths": {
       "@station/observability": ["./packages/observability/src/index.ts"],
-      "@station/api": ["./packages/station/src/index.ts"]
+      "@station/api": ["./packages/station/src/index.ts"],
+      "@station/runtime": ["./packages/runtime/src/index.ts"],
+      "@station/packs": ["./packages/packs/src/index.ts"],
+      "@station/loop": ["./packages/loop/src/index.ts"],
+      "@station/channels": ["./packages/channels/src/index.ts"]
     }
   },
   "include": [
     "packages",
+    "apps",
     "evals",
     "tests",
     "vitest.config.ts",

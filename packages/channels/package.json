@@ -1,0 +1,11 @@
+{
+  "name": "@station/channels",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@station/observability": "workspace:*"
+  }
+}

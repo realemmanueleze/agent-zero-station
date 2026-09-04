@@ -1,5 +1,27 @@
 :root {
-  --station-bg: #0f1115;
-  --station-fg: #f4f1ea;
-  --station-accent: #c45c26;
+  --bg: #101216;
+  --ink: #f3eee4;
+  --line: #2b3038;
+  --mute: #9a9388;
+  --park-border: #d26a2c;
+  --park-fill: #1b1612;
+  --ok: #7dba7a;
+  --danger: #e36a5d;
+  --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --space: 1rem;
+  --station-bg: var(--bg);
+  --station-fg: var(--ink);
+  --station-accent: var(--park-border);
+}
+
+html[data-theme="high-contrast"] {
+  --bg: #000000;
+  --ink: #ffffff;
+  --line: #ffffff;
+  --mute: #d7d7d7;
+  --park-border: #ffe600;
+  --park-fill: #141200;
+  --ok: #7cff6b;
+  --danger: #ff6b6b;
 }
