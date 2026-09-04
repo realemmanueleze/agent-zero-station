@@ -1,1 +1,1 @@
-{"fixtureId":"demo-1","tenantId":"tenant-a","text":"Need a quote for 12 seats","state":"parked"}
+{"fixtureId":"demo-1","tenantId":"tenant-a","from":"jordan@northwind.io","subject":"Draft quote · $12,400","text":"Need a quote for 12 seats. Estimated contract $12400.","amount":12400,"rationale":"Intercept: estimated contract over $10k. Pack sales asked for a closer. Policy parked it.","state":"parked"}

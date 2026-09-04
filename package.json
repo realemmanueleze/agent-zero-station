@@ -4,13 +4,20 @@
   "type": "module",
   "packageManager": "pnpm@9.9.0",
   "scripts": {
+    "dev": "concurrently -k -n worker,cockpit -c cyan,magenta \"tsx apps/worker/src/main.ts\" \"pnpm --filter @station/cockpit dev\"",
     "test": "vitest run && vitest run --config vitest.eval.config.ts",
     "test:watch": "vitest",
     "test:tickets": "vitest run --config vitest.tickets.config.ts",
     "eval:recorded": "vitest run --config vitest.eval.config.ts",
     "eval:live": "echo 'nightly evals not wired yet' && exit 0"
   },
+  "dependencies": {
+    "@station/runtime": "workspace:*"
+  },
   "devDependencies": {
+    "@types/node": "^24.3.0",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }

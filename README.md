@@ -18,10 +18,12 @@ This repo is not [frdel/agent-zero](https://github.com/frdel/agent-zero). That i
 Tests and evals come first. Code is written to pass them. Errors are `StationError`. Logs are JSON through `@station/observability`. See [docs/ENGINEERING.md](docs/ENGINEERING.md) and [tickets/](tickets/).
 
 ```bash
-pnpm test          # T0 + inventory (green)
-pnpm test:tickets  # T1–T7 contracts (red until each ticket)
-pnpm eval:recorded # merge-gate evals (red until those tickets)
+pnpm i
+pnpm dev           # cockpit :19173, worker :19174
+pnpm test          # contracts + recorded evals
 ```
+
+Open http://127.0.0.1:19173/park. See [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
 
 ## Local ports
 

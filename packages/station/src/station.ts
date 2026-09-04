@@ -29,6 +29,10 @@ type Decision = {
   tenantId: string;
   packId: string;
   signalId?: string;
+  from?: string;
+  subject?: string;
+  amount?: number;
+  rationale?: string;
 };
 
 type Signal = {
@@ -74,6 +78,7 @@ function catalogEquals(a: string, b: string): boolean {
 export class Station implements StationApi {
   private migrated = false;
   private env: Record<string, string | undefined> = {};
+  private seedTestRows: boolean;
   private signals = new Map<string, Signal>();
   private claims = new Map<string, string>();
   private leases = new Map<string, Lease>();
@@ -89,8 +94,11 @@ export class Station implements StationApi {
   private claimChain: Promise<unknown> = Promise.resolve();
   private approveLocks = new Map<string, Promise<void>>();
 
-  constructor() {
-    this.seed();
+  constructor(opts?: { seed?: boolean }) {
+    this.seedTestRows = opts?.seed ?? true;
+    if (this.seedTestRows) {
+      this.seed();
+    }
   }
 
   private seed(): void {
@@ -280,6 +288,10 @@ export class Station implements StationApi {
           fixtureId: string;
           tenantId?: string;
           text?: string;
+          from?: string;
+          subject?: string;
+          amount?: number;
+          rationale?: string;
         };
         await this.schema.upsertSignal({
           fixtureId: row.fixtureId,
@@ -293,6 +305,11 @@ export class Station implements StationApi {
         if (existing) {
           existing.signalId = row.fixtureId;
           existing.tenantId = row.tenantId ?? existing.tenantId;
+          existing.body = row.text ?? existing.body;
+          existing.from = row.from ?? existing.from;
+          existing.subject = row.subject ?? existing.subject;
+          existing.amount = row.amount ?? existing.amount;
+          existing.rationale = row.rationale ?? existing.rationale;
           continue;
         }
         this.decisions.set(row.fixtureId, {
@@ -303,6 +320,10 @@ export class Station implements StationApi {
           tenantId: row.tenantId ?? "tenant-a",
           packId: this.latestPackId,
           signalId: row.fixtureId,
+          from: row.from,
+          subject: row.subject,
+          amount: row.amount,
+          rationale: row.rationale,
         });
         this.sendIds.add(`send-${row.fixtureId}`);
       }
@@ -368,7 +389,7 @@ export class Station implements StationApi {
         void this.handleWorker(req, res, log);
       });
       await new Promise<void>((resolve) => {
-        server.listen({ host: "127.0.0.1", port: 0 }, resolve);
+        server.listen({ host: "127.0.0.1", port: opts.port ?? 0 }, resolve);
       });
       const address = server.address();
       const port = typeof address === "object" && address ? address.port : 0;
@@ -559,13 +580,18 @@ export class Station implements StationApi {
           ),
         };
       }
-      const items = [...this.decisions.values()]
-        .filter((row) => row.state === "parked")
-        .map((row) => ({
-          id: row.id,
-          state: row.state,
-          actions: ["Approve", "Edit", "Kill"] as ParkItem["actions"],
-        }));
+      const items = [...this.decisions.values()].map((row) => ({
+        id: row.id,
+        state: row.state,
+        actions: ["Approve", "Edit", "Kill"] as ParkItem["actions"],
+        tenantId: row.tenantId,
+        packId: row.packId,
+        body: row.body,
+        from: row.from,
+        subject: row.subject,
+        amount: row.amount,
+        rationale: row.rationale,
+      }));
       return { status: 200, json: { items } };
     },
     approveFromBrowser: async (decisionId) => {
@@ -749,6 +775,28 @@ export class Station implements StationApi {
         if (url.startsWith("/__boom")) {
           throw "boom";
         }
+        const parkAction = url.match(/^\/park\/([^/]+)\/(approve|edit|kill)/);
+        if (parkAction && req.method === "POST") {
+          const decisionId = decodeURIComponent(parkAction[1] ?? "");
+          const action = parkAction[2];
+          if (action === "approve") {
+            const receipt = await this.send.approve(decisionId);
+            write(200, { sendId: receipt.sendId, state: "sent" });
+            return;
+          }
+          if (action === "kill") {
+            await this.send.kill(decisionId);
+            write(200, { state: "dropped" });
+            return;
+          }
+          if (action === "edit") {
+            const raw = await readRequestBody(req);
+            const parsed = JSON.parse(raw || "{}") as { body?: string };
+            const edited = await this.send.edit(decisionId, parsed.body ?? "");
+            write(200, edited);
+            return;
+          }
+        }
         if (url.startsWith("/park")) {
           const listed = await this.cockpit.parkList({ host: "127.0.0.1" });
           write(listed.status, listed.json);
@@ -772,7 +820,16 @@ export class Station implements StationApi {
   }
 }
 
-export function getStation(): StationApi {
-  return new Station();
+export function getStation(opts?: { seed?: boolean }): StationApi {
+  return new Station(opts);
+}
+
+function readRequestBody(req: Parameters<Parameters<typeof createServer>[0]>[0]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(chunk as Buffer));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
 }
 

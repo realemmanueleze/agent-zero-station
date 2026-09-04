@@ -1,0 +1,111 @@
+body {
+  margin: 0;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+a {
+  color: inherit;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  padding: var(--space);
+  border-bottom: 1px solid var(--line);
+}
+
+.top h1 {
+  font-size: 1rem;
+  margin: 0;
+  flex: 1;
+}
+
+.pack {
+  border: 1px dashed var(--line);
+  padding: 0.25rem 0.6rem;
+  margin-right: 0.4rem;
+  text-decoration: none;
+}
+
+.pack.on {
+  border-style: solid;
+  background: var(--park-fill);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 16rem 1fr 16rem;
+  min-height: calc(100vh - 3.5rem);
+}
+
+.connectors,
+.loop,
+.work {
+  padding: var(--space);
+  border-right: 1px solid var(--line);
+}
+
+.loop {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+
+.card {
+  border: 1px solid var(--park-border);
+  background: var(--park-fill);
+  padding: var(--space);
+  margin-bottom: var(--space);
+}
+
+.eyebrow,
+.meta,
+.scores,
+.note,
+small {
+  color: var(--mute);
+  font-size: 0.8rem;
+}
+
+.body,
+.why {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+}
+
+.actions {
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-right: 0.5rem;
+}
+
+button {
+  background: var(--ink);
+  color: var(--bg);
+  border: 0;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+
+button.danger {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+input[type="text"] {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 0.3rem;
+}
+
+.inbox {
+  padding-left: 1.1rem;
+}
+
+.empty {
+  color: var(--mute);
+}
