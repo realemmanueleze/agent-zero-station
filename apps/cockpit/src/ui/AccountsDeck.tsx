@@ -1,19 +1,11 @@
 "use client";
 
-import type { Mailbox } from "@station/channels";
+import { StationShell } from "./StationShell.tsx";
+import type { Mailbox } from "./types.ts";
 
 export function AccountsDeck({ mailboxes }: { mailboxes: Mailbox[] }) {
   return (
-    <div className="deck">
-      <header className="top">
-        <div>
-          <p className="brand-kicker">Station kit</p>
-          <h1>Accounts</h1>
-        </div>
-        <a className="pack" href="/park">
-          Back to park
-        </a>
-      </header>
+    <StationShell title="Accounts: mailbox rows">
       <main className="work">
         <ul className="connectors">
           {mailboxes.map((row) => (
@@ -21,15 +13,18 @@ export function AccountsDeck({ mailboxes }: { mailboxes: Mailbox[] }) {
               <span className="dot live" />
               <div>
                 <strong>
-                  {row.transport} — {row.id}
+                  {row.transport}: {row.id}
                 </strong>
                 <small>{row.credentialsKey}</small>
               </div>
             </li>
           ))}
         </ul>
-        <p className="note">Append a row in station.config.ts. No code change. Each mailbox is a tenant key.</p>
+        <p className="note">
+          Append a row in station.config.ts. No code change. Each mailbox is a tenant key. Open
+          Channels → email for the park interface on each connection.
+        </p>
       </main>
-    </div>
+    </StationShell>
   );
 }

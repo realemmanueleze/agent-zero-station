@@ -1,7 +1,37 @@
-import type { ParkItem } from "../ui/types.ts";
+import type { Connection, ParkItem } from "../ui/types.ts";
 
 const workerUrl = () => process.env.STATION_WORKER_URL ?? "http://127.0.0.1:19174";
 const controlToken = () => process.env.STATION_CONTROL_TOKEN ?? "dev-control-token";
+
+export async function workerRedirect(path: string): Promise<Response> {
+  const res = await fetch(`${workerUrl()}${path}`, {
+    redirect: "manual",
+    headers: { authorization: `Bearer ${controlToken()}` },
+    cache: "no-store",
+  });
+  const headers = new Headers();
+  const location = res.headers.get("location");
+  if (location) {
+    headers.set("location", location);
+  }
+  return new Response(null, { status: res.status, headers });
+}
+
+export async function listLiveConnections(): Promise<Connection[]> {
+  try {
+    const res = await workerFetch("/connections");
+    if (!res.ok) {
+      return [];
+    }
+    const json = (await res.json()) as { items?: Connection[] };
+    return (json.items ?? []).map((row) => ({
+      ...row,
+      detail: row.detail ?? row.status,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 export async function workerFetch(
   path: string,

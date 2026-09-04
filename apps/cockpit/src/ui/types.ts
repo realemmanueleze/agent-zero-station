@@ -1,3 +1,5 @@
+export type ChannelKind = "email" | "slack" | "obsidian" | "db" | "mcp";
+
 export type ParkItem = {
   id: string;
   state: string;
@@ -8,14 +10,36 @@ export type ParkItem = {
   subject?: string;
   amount?: number;
   rationale?: string;
+  channel?: ChannelKind;
+  accountId?: string;
 };
 
 export type Connector = {
   id: string;
-  kind: "email" | "slack" | "obsidian" | "db" | "mcp";
+  kind: ChannelKind;
   label: string;
   detail: string;
-  status: "isolated" | "watching" | "live" | "added";
+  status: "isolated" | "watching" | "live" | "added" | "pending" | "error" | "needs_reauth";
+};
+
+export type Connection = Connector & {
+  account: string;
+};
+
+export type Mailbox = {
+  id: string;
+  transport: "gmail" | "imap";
+  credentialsKey: string;
+};
+
+export type ActivityEvent = {
+  id: string;
+  at: string;
+  channel: ChannelKind;
+  account: string;
+  action: string;
+  signalId: string;
+  detail: string;
 };
 
 export type LoopStep = {

@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+import { loadPark } from "../lib/worker.ts";
+import { ActionDeck } from "../ui/ActionDeck.tsx";
 
-export default function HomePage() {
-  redirect("/park");
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const { items, workerUp } = await loadPark();
+  return <ActionDeck items={items} workerUp={workerUp} />;
 }
