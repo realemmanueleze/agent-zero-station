@@ -27,6 +27,7 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T20 | Slack, vault, pack SQL, MCP live adapters | `tests/tickets/T20-live-adapters.test.ts` | `evals/suites/adapters.live.eval.ts` |
 | T21 | Activity and Brief read the ledger | `tests/tickets/T21-ledger-cockpit.test.ts` | `evals/suites/cockpit.ledger-views.eval.ts` |
 | T22 | Learning proposals, fail-closed | `tests/tickets/T22-learning.test.ts` | `evals/suites/learning.proposals.eval.ts` |
+| T23 | Fly + GHCR on tag | `tests/tickets/T23-dist.test.ts` | `evals/suites/dist.release.eval.ts` |
 
 Branch history for T3 (and every later ticket):
 

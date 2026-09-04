@@ -1,0 +1,24 @@
+app = "agent-zero-station"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  STATION_COCKPIT_PORT = "19173"
+  STATION_WORKER_PORT = "19174"
+
+[http_service]
+  internal_port = 19173
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[mounts]
+  source = "station_data"
+  destination = "/data"
