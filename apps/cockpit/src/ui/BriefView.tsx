@@ -2,14 +2,23 @@
 
 import { useMemo, useState } from "react";
 import { StationShell } from "./StationShell.tsx";
-import { buildActivity, generateBrief, queryWorkspace } from "./workspace.ts";
-import type { ParkItem } from "./types.ts";
+import { activityFromLedger, generateBrief, queryWorkspace } from "./workspace.ts";
+import type { ActivityEvent, ParkItem } from "./types.ts";
 
-export function BriefView({ items }: { items: ParkItem[] }) {
+export function BriefView({
+  items,
+  events,
+  initialBrief,
+}: {
+  items: ParkItem[];
+  events?: ActivityEvent[];
+  initialBrief?: string;
+}) {
   const [query, setQuery] = useState("");
-  const activity = useMemo(() => buildActivity(items), [items]);
+  const activity = useMemo(() => events ?? activityFromLedger(items), [events, items]);
   const matches = queryWorkspace(query, items, activity);
-  const brief = generateBrief(items, activity, query);
+  const brief =
+    !query && initialBrief ? initialBrief : generateBrief(items, activity, query);
   const waiting = items.filter((item) => item.state === "parked").length;
   return (
     <StationShell title="Brief: ask the workspace" waiting={waiting}>
