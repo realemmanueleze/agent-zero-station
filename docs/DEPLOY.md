@@ -6,7 +6,8 @@ Same six boxes on every host:
 - [ ] `/data` writable
 - [ ] model API key (skip on fixture-only)
 - [ ] ports 19173 / 19174 or `STATION_COCKPIT_PORT` / `STATION_WORKER_PORT`
-- [ ] OAuth/IMAP redirect matches this host (skip on fixture-only)
+- [ ] `STATION_MASTER_KEY` set (32 bytes)
+- [ ] OAuth redirect `https://<host>/oauth/google/callback` (skip on fixture-only)
 - [ ] open `/park` and see the demo fixture
 
 ## Local pnpm
@@ -19,7 +20,7 @@ Docker 24+. `docker compose up`. Volumes `./data:/data`. Same URL.
 
 ## Generic Linux VM
 
-Docker, a hostname, TLS (Caddy). DNS A record, ports 80/443, `/data` disk. OAuth redirect `https://<host>/oauth/callback` on your Google app.
+Docker, a hostname, TLS (Caddy). DNS A record, ports 80/443, `/data` disk. Set `STATION_PUBLIC_URL=https://<host>`. OAuth redirect `https://<host>/oauth/google/callback` on your Google app.
 
 ## Fly.io / Railway
 

@@ -13,6 +13,12 @@ export const errorCodes = {
   "schema.migrate_failed": { status: 500, retryable: false },
   "send.already_sent": { status: 409, retryable: false },
   "send.provider_failed": { status: 502, retryable: true },
+  "connections.invalid": { status: 400, retryable: false },
+  "connections.encrypt_failed": { status: 500, retryable: false },
+  "connections.decrypt_failed": { status: 500, retryable: false },
+  "connections.missing": { status: 404, retryable: false },
+  "connections.needs_reauth": { status: 409, retryable: false },
+  "auth.oauth_state": { status: 400, retryable: false },
 } as const;
 
 export type ErrorCode = keyof typeof errorCodes;

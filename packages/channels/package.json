@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@station/observability": "workspace:*"
+    "@station/observability": "workspace:*",
+    "nodemailer": "^7.0.13"
   }
 }

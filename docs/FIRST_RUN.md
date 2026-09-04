@@ -12,11 +12,12 @@ The worker binds 127.0.0.1:19174. The Next.js cockpit proxies Approve so the bro
 
 ## Live mailbox
 
-1. Create your own Google OAuth client or a Gmail app password. This repo ships no shared client.
-2. Set `STATION_IMAP_HOST`, `STATION_IMAP_USER`, `STATION_IMAP_PASS` and the SMTP pair in `.env`. Gmail hosts are `imap.gmail.com` / `smtp.gmail.com`.
-3. Append a second mailbox in `station.config.ts`. Isolation: tenant A prompts never include tenant B.
-4. Restart `pnpm dev`. A new mail parks. Approve sends through SMTP. If SMTP is down the card stays parked.
+1. Create your own Google OAuth client. This repo ships no shared client. Redirect `http://127.0.0.1:19173/oauth/google/callback`.
+2. Set `STATION_MASTER_KEY` (32 bytes) plus `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `.env`. Do not put mailbox passwords or refresh tokens in `.env`.
+3. Open `/channels/email` and use Add source: Sign in with Google, or paste IMAP/SMTP. Slack, Obsidian, db, and MCP use the same panel. Connecting never sends.
+4. Testing-mode Google refresh tokens die in 7 days. Sign in again on the card. Sign in needs one worker (PKCE is in memory). Local origin is `http://127.0.0.1:19173`.
+5. Approve still owns send. If SMTP or Gmail is down the card stays parked.
 
-Slack, Obsidian, DB, and MCP are fixture rows. Live paths for those are experimental.
+Isolation: tenant A prompts never include tenant B. Each live mailbox is its own `account`.
 
 See [DEPLOY.md](DEPLOY.md) for Compose and a cloud VM.

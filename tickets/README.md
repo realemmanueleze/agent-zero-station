@@ -18,6 +18,8 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T11 | Email channel + fail-stays-parked | `tests/tickets/T11-email.test.ts` | `evals/suites/email.park-then-approve.eval.ts` |
 | T12 | `/accounts` and `/packs` | `tests/tickets/T12-cockpit-pages.test.ts` | `evals/suites/cockpit.accounts-packs.eval.ts` |
 | T13 | License, docs, Compose, smoke | `tests/tickets/T13-ship-kit.test.ts` | compose smoke |
+| T14 | Unified action deck + channel drill-down | `tests/tickets/T14-command-deck.test.ts` | `evals/suites/cockpit.command-deck.eval.ts` |
+| T15 | Encrypted Add source for every kind | `tests/tickets/T15-connections.test.ts` | `evals/suites/connections.add-source.eval.ts` |
 
 Branch history for T3 (and every later ticket):
 

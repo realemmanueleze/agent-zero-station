@@ -20,7 +20,15 @@ Forkers restyle by overriding those variables in `station.theme.css` or `apps/co
 
 ## Layout
 
-Header 56px. Three columns: connectors 16rem, work 1fr, loop 16rem. Collapse to one column under 960px.
+Header 56px. Primary nav: Action, Channels, Activity, Brief, Packs.
+
+- **Action** is the unified queue. Everything that needs a human lands here with Approve / Edit / Kill.
+- **Channels** drills into each signal source (email, Slack, Obsidian, db, MCP). More than one email connection opens the same park HITL on that mailbox.
+- A connection page shows incoming signals, parked work, and the action log for that source.
+- **Activity** is the cross-channel log of what was received, watched, queried, and decided.
+- **Brief** queries the workspace and writes a digest from the ledger.
+
+Action and connection pages stay three columns: sources/incoming 16rem, work 1fr, loop/log 16rem. Collapse to one column under 960px.
 
 ## Motion
 

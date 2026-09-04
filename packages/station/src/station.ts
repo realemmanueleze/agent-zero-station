@@ -13,6 +13,9 @@ import {
 import { getPack, type PackScore, type PackSignal } from "@station/packs";
 import { runScoringTurn, scoringTurnCallsCommitSend } from "@station/loop";
 import { mailboxesFromConfig } from "@station/channels";
+import { catalogEquals } from "./catalog.ts";
+import { approveWithConnection, ConnectionStore, handleVaultRequest } from "./connections.ts";
+import type { ProducedEmail } from "./email-producer.ts";
 import { CONFIG_READ_KEYS } from "./keys.ts";
 import { stationConfig } from "./station-config.ts";
 import { applyLedgerMigration } from "./postgres.ts";
@@ -38,6 +41,9 @@ type Decision = {
   subject?: string;
   amount?: number;
   rationale?: string;
+  account?: string;
+  kind?: "email" | "slack" | "obsidian" | "db" | "mcp";
+  sendTo?: string;
 };
 
 type Signal = {
@@ -54,7 +60,7 @@ type Lease = {
 
 const DENY_MCP = /send|mail|post|write/i;
 const LEASE_MS = 30_000;
-const LEDGER_TABLES = ["signals", "claims", "leases", "decisions"];
+const LEDGER_TABLES = ["signals", "claims", "leases", "decisions", "connections"];
 const CHECKPOINTER_TABLES = ["da_checkpoints", "da_writes"];
 
 function assertNever(value: never): never {
@@ -78,10 +84,6 @@ function isLocalHost(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host === "::1";
 }
 
-function catalogEquals(a: string, b: string): boolean {
-  return a.replace(/\/$/, "") === b.replace(/\/$/, "");
-}
-
 export class Station implements StationApi {
   private migrated = false;
   private env: Record<string, string | undefined> = {};
@@ -100,6 +102,7 @@ export class Station implements StationApi {
   private latestPackId = "sales";
   private claimChain: Promise<unknown> = Promise.resolve();
   private approveLocks = new Map<string, Promise<void>>();
+  private readonly connectionStore = new ConnectionStore(() => this.env);
 
   constructor(opts?: { seed?: boolean }) {
     this.seedTestRows = opts?.seed ?? true;
@@ -129,7 +132,18 @@ export class Station implements StationApi {
     seedDec("dec-fail", "parked", "send-fail");
     seedDec("dec-crash", "sending", "send-crash");
     seedDec("dec-parked", "parked", "send-parked");
+    seedDec("dec-missing-box", "parked", "send-missing-box");
     seedDec("dec-sent", "sent", "send-sent");
+    const parked = this.decisions.get("dec-parked");
+    if (parked) {
+      parked.account = "work@acme.com";
+      parked.kind = "email";
+    }
+    const missing = this.decisions.get("dec-missing-box");
+    if (missing) {
+      missing.account = "gone@acme.com";
+      missing.kind = "email";
+    }
     seedDec("dec-edit", "parked", "send-edit");
     seedDec("dec-log", "parked", "send-log", "Quote for $12400 confidential body");
     seedDec("demo-park", "parked", "send-demo-park");
@@ -471,6 +485,13 @@ export class Station implements StationApi {
           return { started: false };
         }
         this.producerStarts.set(producerRef, 1);
+        if (producerRef.startsWith("email:")) {
+          const account = producerRef.slice("email:".length);
+          const produced = await this.connectionStore.pollAccount(account);
+          for (const msg of produced) {
+            this.parkProduced(msg);
+          }
+        }
         return { started: true };
       };
       const pending = this.claimChain.then(run, run);
@@ -502,6 +523,11 @@ export class Station implements StationApi {
           write: (line) => this.approveLogLines.push(line),
         }).withContext({ requestId: `approve-${decisionId}` });
         log.info("approve", { decisionId, body: row.body });
+        await approveWithConnection(this.connectionStore, {
+          account: row.account,
+          body: row.body,
+          sendTo: row.sendTo,
+        });
         if (row.state === "parked") {
           row.state = "sending";
         }
@@ -599,6 +625,8 @@ export class Station implements StationApi {
         subject: row.subject,
         amount: row.amount,
         rationale: row.rationale,
+        channel: (row.kind ?? "email") as "email",
+        accountId: row.account ?? stationConfig.email[0]?.id,
       }));
       return { status: 200, json: { items } };
     },
@@ -741,6 +769,24 @@ export class Station implements StationApi {
     },
   };
 
+  private parkProduced(msg: ProducedEmail): void {
+    const id = `prod-${msg.account}-${Date.now()}`;
+    this.decisions.set(id, {
+      id,
+      sendId: `send-${id}`,
+      state: "parked",
+      body: msg.body,
+      tenantId: msg.account,
+      packId: this.latestPackId,
+      account: msg.account,
+      kind: msg.kind,
+      sendTo: msg.sendTo,
+      from: msg.from,
+      subject: msg.subject,
+    });
+    this.sendIds.add(`send-${id}`);
+  }
+
   private requireDecision(id: string): Decision {
     const row = this.decisions.get(id);
     if (!row) {
@@ -766,20 +812,26 @@ export class Station implements StationApi {
     log: Logger,
   ): Promise<void> {
     const requestId = randomUUID();
-    const url = req.url ?? "/";
+    const parsed = new URL(req.url ?? "/", "http://127.0.0.1");
+    const path = parsed.pathname;
     const write = (status: number, body: unknown): void => {
       res.statusCode = status;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify(body));
     };
+    const redirect = (status: number, location: string): void => {
+      res.statusCode = status;
+      res.setHeader("location", location);
+      res.end();
+    };
     try {
       await runWithContext({ requestId, log }, async () => {
-        if (url.startsWith("/health")) {
+        if (path.startsWith("/health")) {
           write(200, { ok: true });
           return;
         }
         const auth = String(req.headers.authorization ?? "");
-        log.info("request", { path: url, authorization: auth });
+        log.info("request", { path, authorization: auth });
         if (!auth || auth !== `Bearer ${this.workerToken}`) {
           write(
             401,
@@ -793,10 +845,28 @@ export class Station implements StationApi {
           );
           return;
         }
-        if (url.startsWith("/__boom")) {
+        if (path.startsWith("/__boom")) {
           throw "boom";
         }
-        const parkAction = url.match(/^\/park\/([^/]+)\/(approve|edit|kill)/);
+        const rawBody =
+          req.method === "POST" || req.method === "PUT" || req.method === "PATCH"
+            ? await readRequestBody(req)
+            : "";
+        if (
+          await handleVaultRequest({
+            path,
+            method: req.method ?? "GET",
+            url: parsed,
+            body: rawBody,
+            store: this.connectionStore,
+            env: this.env,
+            write,
+            redirect,
+          })
+        ) {
+          return;
+        }
+        const parkAction = path.match(/^\/park\/([^/]+)\/(approve|edit|kill)/);
         if (parkAction && req.method === "POST") {
           const decisionId = decodeURIComponent(parkAction[1] ?? "");
           const action = parkAction[2];
@@ -811,27 +881,26 @@ export class Station implements StationApi {
             return;
           }
           if (action === "edit") {
-            const raw = await readRequestBody(req);
-            const parsed = JSON.parse(raw || "{}") as { body?: string };
-            const edited = await this.send.edit(decisionId, parsed.body ?? "");
+            const parsedBody = JSON.parse(rawBody || "{}") as { body?: string };
+            const edited = await this.send.edit(decisionId, parsedBody.body ?? "");
             write(200, edited);
             return;
           }
         }
-        if (url.startsWith("/park")) {
+        if (path.startsWith("/park")) {
           const listed = await this.cockpit.parkList({ host: "127.0.0.1" });
           write(listed.status, listed.json);
           return;
         }
-        if (url.startsWith("/accounts") && req.method === "GET") {
+        if (path.startsWith("/accounts") && req.method === "GET") {
           write(200, { items: mailboxesFromConfig(stationConfig) });
           return;
         }
-        if (url.startsWith("/packs") && req.method === "GET") {
+        if (path.startsWith("/packs") && req.method === "GET") {
           write(200, { items: ["sales", "inbox-triage"], active: this.latestPackId });
           return;
         }
-        const activate = url.match(/^\/packs\/([^/]+)\/activate/);
+        const activate = path.match(/^\/packs\/([^/]+)\/activate/);
         if (activate && req.method === "POST") {
           const packId = decodeURIComponent(activate[1] ?? "sales");
           await this.replay.rescore(

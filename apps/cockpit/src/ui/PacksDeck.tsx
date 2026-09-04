@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { listPackIds, type PackId } from "@station/packs";
+import { StationShell } from "./StationShell.tsx";
 
 export function PacksDeck() {
   const [active, setActive] = useState<PackId>("sales");
@@ -19,16 +20,7 @@ export function PacksDeck() {
   }
 
   return (
-    <div className="deck">
-      <header className="top">
-        <div>
-          <p className="brand-kicker">Station kit</p>
-          <h1>Packs</h1>
-        </div>
-        <a className="pack" href="/park">
-          Back to park
-        </a>
-      </header>
+    <StationShell title="Packs: switch the scoring brain">
       <main className="work">
         <p className="note">Active: {active}</p>
         <div className="packs">
@@ -45,6 +37,6 @@ export function PacksDeck() {
         </div>
         {notice ? <p className="toast">{notice}</p> : null}
       </main>
-    </div>
+    </StationShell>
   );
 }

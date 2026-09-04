@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { StationError } from "@station/observability";
 
@@ -36,8 +36,13 @@ export async function applyLedgerMigration(url: string): Promise<void> {
     }
     const client = new Client({ connectionString: url });
     await client.connect();
-    const sql = readFileSync(join(process.cwd(), "migrations/001_ledger.sql"), "utf8");
-    await client.query(sql);
+    const dir = join(process.cwd(), "migrations");
+    const files = readdirSync(dir)
+      .filter((name) => /^00\d.*\.sql$/.test(name))
+      .sort();
+    for (const file of files) {
+      await client.query(readFileSync(join(dir, file), "utf8"));
+    }
     await client.end();
   } catch (err) {
     if (err instanceof StationError) {
