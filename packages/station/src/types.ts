@@ -65,6 +65,7 @@ export type StationApi = {
     startLiveProducers: (workerId: string) => Promise<{ started: number; skipped: number }>;
     producerStartCount: (producerRef: string) => Promise<number>;
     producerTickCount: (producerRef: string) => Promise<number>;
+    lastLiveTraces: () => Promise<Array<{ name: string; ok: boolean; detail: string }>>;
   };
   send: {
     approve: (decisionId: string) => Promise<Receipt>;

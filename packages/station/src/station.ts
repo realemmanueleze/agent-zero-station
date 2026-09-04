@@ -11,8 +11,13 @@ import {
   type Logger,
 } from "@station/observability";
 import { getPack, type PackScore, type PackSignal } from "@station/packs";
-import { runScoringTurn, scoringTurnCallsCommitSend } from "@station/loop";
-import { mailboxesFromConfig, normalizeGraphMessage } from "@station/channels";
+import {
+  runLiveTurn,
+  runScoringTurn,
+  scoringTurnCallsCommitSend,
+  type LiveToolTrace,
+} from "@station/loop";
+import { mailboxesFromConfig, normalizeGraphMessage, queryPackSql, vaultSearch } from "@station/channels";
 import { catalogEquals } from "./catalog.ts";
 import { approveWithConnection, ConnectionStore, handleVaultRequest } from "./connections.ts";
 import type { ProducedEmail } from "./email-producer.ts";
@@ -107,6 +112,7 @@ export class Station implements StationApi {
   private claimChain: Promise<unknown> = Promise.resolve();
   private approveLocks = new Map<string, Promise<void>>();
   private readonly connectionStore = new ConnectionStore(() => this.env);
+  private lastTraces: LiveToolTrace[] = [];
 
   constructor(opts?: { seed?: boolean }) {
     this.seedTestRows = opts?.seed ?? true;
@@ -535,6 +541,7 @@ export class Station implements StationApi {
       this.producerStarts.get(producerRef) ?? 0,
     producerTickCount: async (producerRef) =>
       this.producerTicks.get(producerRef) ?? 0,
+    lastLiveTraces: async () => this.lastTraces,
   };
 
   send: StationApi["send"] = {
@@ -900,11 +907,42 @@ export class Station implements StationApi {
 
   private parkProduced(msg: ProducedEmail): void {
     const id = `prod-${msg.account}-${Date.now()}`;
+    const signal = {
+      fixtureId: id,
+      tenantId: msg.account,
+      from: msg.from,
+      subject: msg.subject,
+      text: msg.body,
+    };
+    const turn = runLiveTurn(this.latestPackId, signal, {
+      modelKey: this.env.STATION_MODEL_KEY,
+      adapters: {
+        ledgerHits: [...this.decisions.values()].map((row) => ({
+          tenantId: row.tenantId,
+          text: row.subject ?? row.body ?? row.id,
+        })),
+        queryDb: () =>
+          queryPackSql(
+            this.env.PACK_DATABASE_URL ?? "postgres://pack/db",
+            this.env.STATION_DATABASE_URL ?? "postgres://station/db",
+            "select 1",
+          ),
+        vaultSearch: (needle) => {
+          const root = this.env.STATION_VAULT_ROOT;
+          if (!root || !existsSync(root)) {
+            return [];
+          }
+          return vaultSearch(root, needle);
+        },
+      },
+    });
+    this.lastTraces = turn.traces ?? [];
+    const state = turn.state === "dropped" ? "dropped" : "parked";
     this.decisions.set(id, {
       id,
       sendId: `send-${id}`,
-      state: "parked",
-      body: msg.body,
+      state,
+      body: turn.body,
       tenantId: msg.account,
       packId: this.latestPackId,
       account: msg.account,
@@ -912,6 +950,7 @@ export class Station implements StationApi {
       sendTo: msg.sendTo,
       from: msg.from,
       subject: msg.subject,
+      rationale: turn.state,
     });
     this.sendIds.add(`send-${id}`);
     void this.persistLedger();

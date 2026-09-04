@@ -1,3 +1,4 @@
+import { StationError } from "@station/observability";
 import type { PackScore, PackSignal } from "@station/packs";
 
 export const LIVE_TOOL_NAMES = [
@@ -64,4 +65,77 @@ export function buildLivePrompt(input: {
     `text=${input.signal.text ?? input.signal.subject ?? ""}`,
     `ledger=${hits.map((row) => row.text).join("\n")}`,
   ].join("\n");
+}
+
+export type LiveToolTrace = {
+  name: LiveToolName;
+  ok: boolean;
+  detail: string;
+};
+
+export type LiveToolAdapters = {
+  ledgerHits?: Array<{ tenantId: string; text: string }>;
+  queryDb?: () => { rows: unknown[] };
+  vaultSearch?: (needle: string) => string[];
+};
+
+export function executeLiveTools(input: {
+  signal: PackSignal;
+  state: "parked" | "dropped" | "escalated";
+  draft: string;
+  adapters?: LiveToolAdapters;
+}): LiveToolTrace[] {
+  const tenant = input.signal.tenantId ?? "";
+  const needle = input.signal.text ?? input.signal.subject ?? "";
+  const traces: LiveToolTrace[] = [];
+
+  traces.push({ name: "read_signal", ok: true, detail: needle });
+
+  const hits = (input.adapters?.ledgerHits ?? []).filter((row) => row.tenantId === tenant);
+  traces.push({
+    name: "search_ledger",
+    ok: true,
+    detail: hits.map((row) => row.text).join("\n"),
+  });
+
+  traces.push({ name: "draft_reply", ok: true, detail: input.draft });
+
+  if (input.adapters?.queryDb) {
+    try {
+      const result = input.adapters.queryDb();
+      traces.push({ name: "query_db", ok: true, detail: String(result.rows.length) });
+    } catch (err) {
+      const code = err instanceof StationError ? err.code : "invariant.unhandled";
+      traces.push({ name: "query_db", ok: false, detail: code });
+    }
+  } else {
+    traces.push({ name: "query_db", ok: true, detail: "" });
+  }
+
+  if (input.adapters?.vaultSearch) {
+    traces.push({
+      name: "vault_search",
+      ok: true,
+      detail: input.adapters.vaultSearch(needle).join("\n"),
+    });
+  } else {
+    traces.push({ name: "vault_search", ok: true, detail: "" });
+  }
+
+  switch (input.state) {
+    case "escalated":
+      traces.push({ name: "escalate", ok: true, detail: "escalated" });
+      break;
+    case "dropped":
+      traces.push({ name: "drop", ok: true, detail: "dropped" });
+      break;
+    case "parked":
+      break;
+    default: {
+      const _never: never = input.state;
+      return _never;
+    }
+  }
+
+  return traces;
 }
