@@ -79,7 +79,7 @@ Levels:
 - `warn` — retryable failure
 - `error` — non-retryable or exhausted retry
 
-Redact always: OAuth tokens, `STATION_MASTER_KEY`, `STATION_CONTROL_TOKEN`, `STATION_COCKPIT_PASSWORD`, `Authorization` headers, raw mail bodies, pack SQL results that look like credentials.
+Redact always: OAuth tokens, `STATION_MASTER_KEY`, `STATION_CONTROL_TOKEN`, `STATION_COCKPIT_PASSWORD`, `NANGO_SECRET_KEY`, `NANGO_WEBHOOK_SECRET`, `Authorization` headers, raw mail bodies, pack SQL results that look like credentials.
 
 Do not log at `info` on every poll tick. Heartbeats are `debug`.
 
@@ -103,6 +103,7 @@ pnpm test          # implemented packages + ticket inventory (must stay green)
 pnpm test:tickets  # T1–T7 contracts; red until that ticket's program exists
 pnpm eval:recorded # merge-gate evals, no live model; red until those tickets land
 pnpm eval:live     # nightly, needs a model key
+pnpm smoke:compose # fixture park on 127.0.0.1:29173 (compose.smoke.yml)
 ```
 
 `pnpm test` is the T0 / inventory gate. It must not wait for T1–T7. Those suites live in `tests/tickets/` and `evals/suites/` so later tickets are written to pass already-committed assertions.

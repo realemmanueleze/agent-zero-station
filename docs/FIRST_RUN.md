@@ -8,7 +8,7 @@ pnpm dev
 
 Open http://127.0.0.1:19173/ or http://127.0.0.1:19173/park. You should see the demo fixture parked with Approve, Edit, and Kill. Theme cycles system → light → dark → high contrast. ⌘K opens the command palette. A / E / K hit the first parked card. Connecting a live mailbox is optional and never sends.
 
-The worker binds 127.0.0.1:19174. The Next.js cockpit proxies Approve so the browser never sees `STATION_CONTROL_TOKEN`. Restyle with CSS tokens. See [THEMING.md](THEMING.md) and [DESIGN.md](DESIGN.md).
+The worker binds 127.0.0.1:19174. The Next.js cockpit proxies Approve so the browser never sees `STATION_CONTROL_TOKEN`. Localhost park is open. Off-box desk access needs `STATION_COCKPIT_PASSWORD` (login at `/login`). Nango webhooks post to `/api/nango/webhook` without that password; they still need HMAC. Restyle with CSS tokens. See [THEMING.md](THEMING.md) and [DESIGN.md](DESIGN.md).
 
 ## Tracks
 
@@ -49,7 +49,7 @@ If a call fails:
 
 1. Create your own Google OAuth client. This repo ships no shared client. Redirect `http://127.0.0.1:19173/oauth/google/callback`.
 2. Set `STATION_MASTER_KEY` (32 bytes) plus `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in `.env`. Do not put mailbox passwords or refresh tokens in `.env`.
-3. Open `/channels/email` and use Add source: Sign in with Google, or paste IMAP/SMTP. Slack, Obsidian, db, and MCP use the same panel. Connecting never sends. Optional: set `NANGO_SECRET_KEY` so Sign in opens Nango Connect (Gmail and Slack). Users grant Google or Slack; they do not create a Nango account. Drive is the same Google app later. Approve still owns send.
+3. Open `/channels/email` and use Add source: Sign in with Google, or paste IMAP/SMTP. Slack, Obsidian, db, and MCP use the same panel. Connecting never sends. Optional: set `NANGO_SECRET_KEY` so Sign in opens Nango Connect (Gmail and Slack). Users grant Google or Slack; they do not create a Nango account. Point Nango's webhook at `http://127.0.0.1:19173/api/nango/webhook` (or `https://<host>/api/nango/webhook`) and set `NANGO_WEBHOOK_SECRET` to the Environment Settings signing key (`X-Nango-Hmac-Sha256`). Drive is the same Google app later. Approve still owns send.
 4. Testing-mode Google refresh tokens die in 7 days. Sign in again on the card. Sign in needs one worker (PKCE is in memory). Local origin is `http://127.0.0.1:19173`. Google verification can use `https://<host>/privacy`. See [PRIVACY.md](PRIVACY.md).
 5. Approve still owns send. If SMTP or Gmail is down the card stays parked.
 
