@@ -18,6 +18,7 @@ export const errorCodes = {
   "connections.decrypt_failed": { status: 500, retryable: false },
   "connections.missing": { status: 404, retryable: false },
   "connections.needs_reauth": { status: 409, retryable: false },
+  "connections.nango_failed": { status: 502, retryable: true },
   "auth.oauth_state": { status: 400, retryable: false },
 } as const;
 

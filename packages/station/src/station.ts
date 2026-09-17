@@ -20,7 +20,8 @@ import {
 import { mailboxesFromConfig, normalizeGraphMessage, queryPackSql, vaultSearch } from "@station/channels";
 import { catalogEquals } from "./catalog.ts";
 import { approveWithConnection, ConnectionStore, handleVaultRequest } from "./connections.ts";
-import type { ProducedEmail } from "./email-producer.ts";
+import { NANGO_WEBHOOK_MAX_BYTES } from "./nango.ts";
+import { fixtureInbound, inboundDecisionId, type ProducedEmail } from "./email-producer.ts";
 import { CONFIG_READ_KEYS } from "./keys.ts";
 import { stationConfig } from "./station-config.ts";
 import { getSharedLedger } from "./ledger.ts";
@@ -517,7 +518,7 @@ export class Station implements StationApi {
     startLiveProducers: async (workerId) => {
       const live = this.connectionStore
         .list()
-        .filter((row) => row.kind === "email" && row.status === "live");
+        .filter((row) => (row.kind === "email" || row.kind === "slack") && row.status === "live");
       const cap = stationConfig.mailProducerCap;
       let started = 0;
       let skipped = 0;
@@ -527,7 +528,7 @@ export class Station implements StationApi {
           continue;
         }
         try {
-          const result = await this.worker.startProducer(`email:${row.account}`, workerId);
+          const result = await this.worker.startProducer(`${row.kind}:${row.account}`, workerId);
           if (result.started) {
             started += 1;
           }
@@ -801,12 +802,15 @@ export class Station implements StationApi {
   }
 
   private async pollProducer(producerRef: string): Promise<void> {
-    if (!producerRef.startsWith("email:")) {
+    const email = producerRef.startsWith("email:");
+    const slack = producerRef.startsWith("slack:");
+    if (!email && !slack) {
       this.producerTicks.set(producerRef, (this.producerTicks.get(producerRef) ?? 0) + 1);
       return;
     }
-    const account = producerRef.slice("email:".length);
-    const produced = await this.connectionStore.pollAccount(account);
+    const kind = email ? "email" : "slack";
+    const account = producerRef.slice(`${kind}:`.length);
+    const produced = await this.connectionStore.pollAccount(account, kind);
     for (const msg of produced) {
       this.parkProduced(msg);
     }
@@ -906,7 +910,10 @@ export class Station implements StationApi {
   }
 
   private parkProduced(msg: ProducedEmail): void {
-    const id = `prod-${msg.account}-${Date.now()}`;
+    const id = inboundDecisionId(msg);
+    if (this.decisions.has(id)) {
+      return;
+    }
     const signal = {
       fixtureId: id,
       tenantId: msg.account,
@@ -1019,7 +1026,7 @@ export class Station implements StationApi {
         }
         const rawBody =
           req.method === "POST" || req.method === "PUT" || req.method === "PATCH"
-            ? await readRequestBody(req)
+            ? await readRequestBody(req, path === "/nango/webhook" ? NANGO_WEBHOOK_MAX_BYTES : 1_048_576)
             : "";
         if (
           await handleVaultRequest({
@@ -1031,6 +1038,9 @@ export class Station implements StationApi {
             env: this.env,
             write,
             redirect,
+            headers: {
+              "x-nango-hmac-sha256": headerValue(req.headers, "x-nango-hmac-sha256"),
+            },
           })
         ) {
           await this.persistLedger();
@@ -1111,12 +1121,52 @@ export function getStation(opts?: { seed?: boolean }): StationApi {
   return new Station(opts);
 }
 
-function readRequestBody(req: Parameters<Parameters<typeof createServer>[0]>[0]): Promise<string> {
+function headerValue(
+  headers: Parameters<Parameters<typeof createServer>[0]>[0]["headers"],
+  name: string,
+): string {
+  const raw = headers[name];
+  return Array.isArray(raw) ? (raw[0] ?? "") : String(raw ?? "");
+}
+
+function readRequestBody(
+  req: Parameters<Parameters<typeof createServer>[0]>[0],
+  maxBytes: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(chunk as Buffer));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    let size = 0;
+    let settled = false;
+    const fail = (err: unknown) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(err);
+    };
+    req.on("data", (chunk) => {
+      const buf = chunk as Buffer;
+      size += buf.length;
+      if (size > maxBytes) {
+        fail(
+          new StationError({
+            code: "connections.invalid",
+            message: "request body too large",
+          }),
+        );
+        req.destroy();
+        return;
+      }
+      chunks.push(buf);
+    });
+    req.on("end", () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+    req.on("error", fail);
   });
 }
 

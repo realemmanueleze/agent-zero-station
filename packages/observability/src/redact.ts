@@ -1,7 +1,7 @@
 const REDACTED = "[REDACTED]";
 
 const SECRET_KEY =
-  /(master_key|control_token|cockpit_password|^authorization$|password|secret|api_key|access_token)$/i;
+  /(master_key|control_token|cockpit_password|^authorization$|password|secret_key|secret|api_key|access_token)$/i;
 
 export function redactValue(value: unknown, key?: string): unknown {
   if (key && (SECRET_KEY.test(key) || key === "body")) {
