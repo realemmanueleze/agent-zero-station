@@ -32,6 +32,21 @@ Each ticket is a PR-train slice. Spec first, failing suite second, program third
 | T25 | Boot starts live email producers | `tests/tickets/T25-boot-producers.test.ts` | `evals/suites/boot.producers.eval.ts` |
 | T26 | Activity and Brief pages hit the worker | `tests/tickets/T26-cockpit-ledger.test.ts` | `evals/suites/cockpit.worker-views.eval.ts` |
 | T27 | Live tools run on inbound park | `tests/tickets/T27-live-tools.test.ts` | `evals/suites/loop.live-tools.eval.ts` |
+| T28 | Nango Connect for Gmail and Slack | `tests/tickets/T28-nango.test.ts` | `evals/suites/nango.connect.eval.ts` |
+| T29 | Station rebuild: park errors, packs active, ledger HITL | `tests/tickets/T29-rebuild.test.ts` | `evals/suites/cockpit.rebuild.eval.ts` |
+| T30 | Nango Gmail/Slack poll and approved send | `tests/tickets/T30-nango-runtime.test.ts` | `evals/suites/nango.runtime.eval.ts` |
+| T31 | Desk behavioral HITL, viewport, themes | `tests/tickets/T31-desk-behavior.test.ts` | `evals/suites/cockpit.rebuild.eval.ts` |
+| T32 | Command API freeze: three shapes, T3 200 replay, inbound control-plane | `tests/tickets/T32-command-api.test.ts` | `evals/suites/command.api.eval.ts` |
+| T33 | Deep Agents wrap + dial + `pack-unseen-engine` | `tests/tickets/T33-hooks-and-dial.test.ts` | `evals/suites/loop.deep-agents.eval.ts` |
+| T34 | Records overlay, named actor | `tests/tickets/T34-records.test.ts` | `evals/suites/records.lead-upsert.eval.ts` |
+| T35 | Episodic context, must-not-leak | `tests/tickets/T35-context.test.ts` | `evals/suites/context.must-not-leak.eval.ts` |
+| T36 | Observer + spend meter 50/80/100 | `tests/tickets/T36-observer-runs.test.ts` | `evals/suites/observer.spend.eval.ts` |
+| T37 | Unseen Engine fixture then production proving gate | `tests/tickets/T37-unseen-inbound.test.ts` | `evals/suites/unseen.inbound.eval.ts` |
+| T38 | Transcripts + parked open work | `tests/tickets/T38-transcripts-open-work.test.ts` | `evals/suites/transcripts.open-work.eval.ts` |
+| T39 | Huffman phone HITL (after T37 production) | `tests/tickets/T39-huffman-desk.test.ts` | `evals/suites/huffman.phone.eval.ts` |
+| T40 | Call Carmen engine (after Phase 2 + T37 production) | `tests/tickets/T40-carmen-engine.test.ts` | `evals/suites/carmen.engine.eval.ts` |
+
+Canonical go-path: land or kill T28–T31 on `dev`, then T32 → T33 → T34 → T35 episodic → T37 fixture → T36 before Huffman → T37 production → T39/T40. T32 must not break T3 send-once. T37 fixture uses `pack-unseen-engine`, not `sales`.
 
 Branch history for T3 (and every later ticket):
 
