@@ -3,7 +3,9 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { commandActions, dispatchCommand } from "./commands.ts";
+import { deskViewport, type DeskLayout } from "./desk-viewport.ts";
 import { PRIVACY_HREF } from "./privacy.ts";
+import { applyTheme, cycleTheme, readStoredTheme, themeLabel, type ThemeName } from "./theme.ts";
 import { subscribeWaiting } from "./waiting.ts";
 
 const links = [
@@ -50,13 +52,35 @@ export function StationShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const [theme, setTheme] = useState("default");
+  const [theme, setTheme] = useState<ThemeName>("system");
   const [query, setQuery] = useState("");
   const [palette, setPalette] = useState(false);
   const [liveWaiting, setLiveWaiting] = useState(waiting);
+  const [layout, setLayout] = useState<DeskLayout>("desktop");
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => setLiveWaiting(waiting), [waiting]);
   useEffect(() => subscribeWaiting(setLiveWaiting), []);
+  useEffect(() => {
+    setHydrated(true);
+    const stored = readStoredTheme();
+    setTheme(stored);
+    applyTheme(stored);
+  }, []);
+  useEffect(() => {
+    const sync = () => setLayout(deskViewport(window.innerWidth));
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+
+  function advanceTheme() {
+    setTheme((current) => {
+      const next = cycleTheme(current);
+      applyTheme(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -92,29 +116,21 @@ export function StationShell({
       }
       if (key === "t") {
         event.preventDefault();
-        toggleTheme();
+        advanceTheme();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [palette]);
+  }, [palette, theme]);
 
   const filteredCommands = useMemo(
     () => commandActions.filter((action) => action.label.toLowerCase().includes(query.toLowerCase())),
     [query],
   );
 
-  function toggleTheme() {
-    setTheme((current) => {
-      const next = current === "default" ? "high-contrast" : "default";
-      document.documentElement.dataset.theme = next;
-      return next;
-    });
-  }
-
   function runCommand(id: string) {
     if (id === "theme") {
-      toggleTheme();
+      advanceTheme();
     } else if (!dispatchCommand(id)) {
       runNav(id);
     }
@@ -122,14 +138,17 @@ export function StationShell({
     setQuery("");
   }
 
+  const split = title.indexOf(": ");
+  const kicker = split > 0 ? title.slice(0, split) : "Station";
+  const headline = split > 0 ? title.slice(split + 2) : title;
+
   return (
-    <div className="deck">
-      <header className="top">
-        <div>
-          <p className="brand-kicker">Station kit</p>
+    <div className="station" data-desk-layout={layout} data-hydrated={hydrated ? "true" : "false"}>
+      <aside className="nav-rail">
+        <div className="brand">
           <h1>Agent Zero</h1>
         </div>
-        <nav className="packs" aria-label="station">
+        <nav className="packs side-nav" aria-label="station">
           {links.map((link) => (
             <a
               key={link.href}
@@ -137,29 +156,40 @@ export function StationShell({
               href={link.href}
             >
               {link.label}
-              {link.href === "/" && liveWaiting > 0 ? ` · ${liveWaiting}` : ""}
+              {link.href === "/" && liveWaiting > 0 ? (
+                <span className="waiting-chip">{liveWaiting}</span>
+              ) : null}
             </a>
           ))}
         </nav>
-        <div className="top-actions">
+        <div className="side-foot">
           <a className="pack" href="/accounts">
             Accounts
           </a>
           <a className="pack" href={PRIVACY_HREF}>
             Privacy
           </a>
-          <button type="button" onClick={() => setPalette(true)}>
-            Command ⌘K
-          </button>
-          <button type="button" onClick={toggleTheme}>
-            {theme === "high-contrast" ? "Default theme" : "Theme"}
-          </button>
         </div>
-      </header>
-      <div className="shell-title">
-        <h2>{title}</h2>
+      </aside>
+      <div className="station-body">
+        <header className="top">
+          <div className="shell-title">
+            <h2>
+              {kicker !== "Station" ? `${kicker}: ` : ""}
+              {headline}
+            </h2>
+          </div>
+          <div className="top-actions">
+            <button type="button" className="command-launch" onClick={() => setPalette(true)}>
+              Command ⌘K
+            </button>
+            <button type="button" data-theme-cycle="true" onClick={advanceTheme}>
+              {themeLabel(theme)}
+            </button>
+          </div>
+        </header>
+        {children}
       </div>
-      {children}
       {palette ? (
         <div className="palette-scrim" onClick={() => setPalette(false)}>
           <div

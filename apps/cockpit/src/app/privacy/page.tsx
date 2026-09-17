@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default function PrivacyPage() {
   return (
     <StationShell title="Privacy">
-      <div dangerouslySetInnerHTML={{ __html: renderPrivacyHtml() }} />
+      <div className="privacy-copy" dangerouslySetInnerHTML={{ __html: renderPrivacyHtml() }} />
     </StationShell>
   );
 }

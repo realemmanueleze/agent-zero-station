@@ -1,10 +1,11 @@
 import { renderParkCardHtml } from "./park-card.tsx";
 import {
-  buildActivity,
+  activityFromLedger,
   channelKinds,
   connectionsFor,
   generateBrief,
   itemsForConnection,
+  kindHasParkQueue,
   queryWorkspace,
 } from "./workspace.ts";
 import type { ChannelKind, ParkItem } from "./types.ts";
@@ -50,11 +51,11 @@ export function renderConnectionHtml(
         `<li class="incoming">${item.from ?? item.id}: ${item.body ?? item.subject ?? item.id}</li>`,
     )
     .join("");
-  const log = buildActivity(items)
+  const log = activityFromLedger(items)
     .filter((row) => row.channel === kind && row.account === account)
     .map((row) => `<li class="log">${row.action}: ${row.detail}</li>`)
     .join("");
-  const hitl = kind === "email" ? scoped.map((item) => renderParkCardHtml(item)).join("") : "";
+  const hitl = kindHasParkQueue(kind) ? scoped.map((item) => renderParkCardHtml(item)).join("") : "";
   return `<section class="connection" data-account="${account}">
   <ul class="incoming">${incoming}</ul>
   ${hitl}
@@ -95,7 +96,7 @@ export function renderAddSourceHtml(kind: ChannelKind): string {
 }
 
 export function briefForQuery(items: ParkItem[], query: string) {
-  const activity = buildActivity(items);
+  const activity = activityFromLedger(items);
   return {
     matches: queryWorkspace(query, items, activity),
     brief: generateBrief(items, activity, query),

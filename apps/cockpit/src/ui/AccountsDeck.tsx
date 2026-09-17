@@ -1,29 +1,60 @@
 "use client";
 
+import { ScreenState } from "./ScreenState.tsx";
 import { StationShell } from "./StationShell.tsx";
-import type { Mailbox } from "./types.ts";
+import type { Connection, Mailbox } from "./types.ts";
 
-export function AccountsDeck({ mailboxes }: { mailboxes: Mailbox[] }) {
+export function AccountsDeck({
+  mailboxes,
+  connections = [],
+  workerUp = true,
+}: {
+  mailboxes: Mailbox[];
+  connections?: Connection[];
+  workerUp?: boolean;
+}) {
+  const live = connections.filter((row) => row.kind === "email");
+  const empty = live.length === 0 && mailboxes.length === 0;
   return (
     <StationShell title="Accounts: mailbox rows">
-      <main className="work">
-        <ul className="connectors">
-          {mailboxes.map((row) => (
-            <li key={row.id}>
-              <span className="dot live" />
-              <div>
-                <strong>
-                  {row.transport}: {row.id}
-                </strong>
-                <small>{row.credentialsKey}</small>
-              </div>
-            </li>
-          ))}
-        </ul>
+      <main className="work stack">
         <p className="note">
-          Append a row in station.config.ts. No code change. Each mailbox is a tenant key. Open
-          Channels → email for the park interface on each connection.
+          Live rows come from the connections vault. Config mailboxes remain as seed labels. Open
+          Channels → email to add a source or park on a mailbox.
         </p>
+        {!workerUp ? (
+          <ScreenState status="error" title="Worker is not reachable">
+            Account rows cannot refresh until `pnpm dev` is running.
+          </ScreenState>
+        ) : null}
+        {empty ? (
+          <ScreenState status="empty" title="No mailboxes yet">
+            Add a source from Channels. Connecting never sends.
+          </ScreenState>
+        ) : (
+          <ul className="source-roster">
+            {live.map((row) => (
+              <li key={row.id}>
+                <a href={`/channels/${row.kind}/${encodeURIComponent(row.id)}`}>
+                  <strong>{row.account}</strong>
+                  <span>
+                    {row.status} · {row.label}
+                  </span>
+                </a>
+              </li>
+            ))}
+            {mailboxes.map((row) => (
+              <li key={`config-${row.id}`}>
+                <div>
+                  <strong>{row.id}</strong>
+                  <span>
+                    {row.transport} · {row.credentialsKey}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </main>
     </StationShell>
   );

@@ -31,6 +31,7 @@ export default defineConfig({
     include: [
       "packages/**/*.test.ts",
       "apps/cockpit/**/*.test.ts",
+      "apps/cockpit/**/*.test.tsx",
       "tests/inventory.test.ts",
       "tests/tickets/**/*.test.ts",
     ],

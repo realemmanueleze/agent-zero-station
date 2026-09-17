@@ -42,6 +42,9 @@ describe("T9 Next cockpit", () => {
     expect(css).toMatch(/--ink/);
     expect(css).toMatch(/--park-border/);
     expect(css).toMatch(/--mono/);
+    expect(css).toMatch(/prefers-color-scheme/);
+    expect(css).toMatch(/data-theme="light"/);
+    expect(css).toMatch(/data-theme="dark"/);
   });
 
   it("command palette lists Approve, Switch pack, and Toggle theme", () => {

@@ -1,8 +1,15 @@
 :root {
   --bg: #000000;
+  --bg-spot: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #111111;
   --ink: #ffffff;
   --line: #ffffff;
+  --line-strong: #ffffff;
   --mute: #d0d0d0;
   --park-border: #ffff00;
   --park-fill: #111111;
+  --ok: #7cff6b;
+  --danger: #ff6b6b;
+  --shadow: none;
 }

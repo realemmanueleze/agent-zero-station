@@ -93,6 +93,22 @@ export function connectionsFor(kind: ChannelKind): Connection[] {
     }));
 }
 
+export function kindHasParkQueue(kind: ChannelKind): boolean {
+  switch (kind) {
+    case "email":
+    case "slack":
+      return true;
+    case "obsidian":
+    case "db":
+    case "mcp":
+      return false;
+    default: {
+      const _never: never = kind;
+      return Boolean(_never);
+    }
+  }
+}
+
 export function inferChannel(item: ParkItem): ChannelKind {
   return item.channel ?? "email";
 }
@@ -142,52 +158,6 @@ export function activityFromLedger(items: ParkItem[]): ActivityEvent[] {
     signalId: item.id,
     detail: item.subject ?? item.body ?? item.id,
   }));
-}
-
-export function buildActivity(items: ParkItem[], opts?: { seeds?: boolean }): ActivityEvent[] {
-  const fromItems = activityFromLedger(items);
-  if (opts?.seeds === false) {
-    return fromItems;
-  }
-  const seed: ActivityEvent[] = [
-    {
-      id: "log-slack-1",
-      at: "2026-01-01T00:05:00Z",
-      channel: "slack",
-      account: "acme-hq",
-      action: "received",
-      signalId: "slack-1",
-      detail: "#inbound mentioned a quote follow-up",
-    },
-    {
-      id: "log-obsidian-1",
-      at: "2026-01-01T00:06:00Z",
-      channel: "obsidian",
-      account: "vault/acme",
-      action: "watched",
-      signalId: "vault-1",
-      detail: "notes/northwind.md changed",
-    },
-    {
-      id: "log-db-1",
-      at: "2026-01-01T00:07:00Z",
-      channel: "db",
-      account: "PACK_DATABASE_URL",
-      action: "queried",
-      signalId: "db-1",
-      detail: "packs/sales/queries/open-deals.sql",
-    },
-    {
-      id: "log-mcp-1",
-      at: "2026-01-01T00:08:00Z",
-      channel: "mcp",
-      account: "docs",
-      action: "tool",
-      signalId: "mcp-1",
-      detail: "search_docs northwind seats",
-    },
-  ];
-  return [...fromItems, ...seed].sort((a, b) => a.at.localeCompare(b.at));
 }
 
 export function queryWorkspace(

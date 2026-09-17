@@ -16,6 +16,10 @@ function inferredAmount(item: ParkItem): number | undefined {
   return match ? Number(match[1].replaceAll(",", "")) : undefined;
 }
 
+function channelOf(item: ParkItem): string {
+  return item.channel ?? "email";
+}
+
 export function renderParkCardHtml(item: ParkItem): string {
   const title = item.subject ?? item.body ?? item.id;
   const amount = inferredAmount(item);
@@ -23,17 +27,11 @@ export function renderParkCardHtml(item: ParkItem): string {
   const why =
     item.rationale ??
     "Fixture park. Approve sends through the worker. The model cannot commit_send.";
-  return `<article class="park-card" data-decision="${escapeHtml(item.id)}" data-risk="${risk}">
-  <p class="eyebrow">email · ${escapeHtml(item.packId ?? "sales")}</p>
+  return `<article class="park-card" data-decision="${escapeHtml(item.id)}" data-risk="${risk}" data-channel="${escapeHtml(channelOf(item))}">
   <h3>${escapeHtml(title)}</h3>
-  <p class="meta">to ${escapeHtml(item.from ?? "unknown")} · tenant ${escapeHtml(item.tenantId ?? "local")}</p>
+  <p class="meta">${escapeHtml(channelOf(item))} · ${escapeHtml(item.packId ?? "sales")} · ${escapeHtml(item.from ?? "unknown")}</p>
   <p class="body">${escapeHtml(item.body ?? "")}</p>
   <p class="why">${escapeHtml(why)}</p>
-  <div class="meters" aria-label="scores">
-    <span>close 0.81</span>
-    <span>nurture 0.22</span>
-    <span>park 0.91</span>
-  </div>
   <div class="hitl">
     <button type="button" data-action="approve">Approve send</button>
     <button type="button" data-action="edit">Edit draft</button>
@@ -52,6 +50,7 @@ export function ParkCard({
   onSaveEdit,
   onCancelEdit,
   onKill,
+  busy,
 }: {
   item: ParkItem;
   editing?: boolean;
@@ -62,6 +61,7 @@ export function ParkCard({
   onSaveEdit?: (id: string) => void;
   onCancelEdit?: () => void;
   onKill?: (id: string) => void;
+  busy?: boolean;
 }) {
   const title = item.subject ?? item.body ?? item.id;
   const amount = inferredAmount(item);
@@ -70,18 +70,19 @@ export function ParkCard({
     item.rationale ??
     "Fixture park. Approve sends through the worker. The model cannot commit_send.";
   return (
-    <article className="park-card" data-decision={item.id} data-risk={risk}>
-      <p className="eyebrow">email · {item.packId ?? "sales"}</p>
+    <article className="park-card" tabIndex={0} data-decision={item.id} data-risk={risk} data-channel={channelOf(item)}>
       <div className="card-title">
         <h3>{title}</h3>
         {amount ? <span className="amount">${amount.toLocaleString()}</span> : null}
       </div>
       <p className="meta">
-        from {item.from ?? "unknown"} · tenant {item.tenantId ?? "local"}
+        {channelOf(item)} · {item.packId ?? "sales"} · {item.from ?? "unknown"}
+        {item.tenantId ? ` · ${item.tenantId}` : ""}
       </p>
       {editing ? (
         <textarea
           className="draft-edit"
+          aria-label="Edit draft"
           value={draft}
           onChange={(event) => onChangeDraft?.(event.target.value)}
           rows={4}
@@ -90,20 +91,6 @@ export function ParkCard({
         <p className="body">{item.body}</p>
       )}
       <p className="why">{why}</p>
-      <div className="meters" aria-label="scores">
-        <span>
-          close 0.81
-          <i style={{ width: "81%" }} />
-        </span>
-        <span>
-          nurture 0.22
-          <i style={{ width: "22%" }} />
-        </span>
-        <span>
-          park 0.91
-          <i style={{ width: "91%" }} />
-        </span>
-      </div>
       <div className="hitl">
         {editing ? (
           <>
@@ -116,7 +103,7 @@ export function ParkCard({
           </>
         ) : (
           <>
-            <button type="button" onClick={() => onApprove?.(item.id)}>
+            <button type="button" disabled={busy} onClick={() => onApprove?.(item.id)}>
               Approve send
             </button>
             <button type="button" onClick={() => onEdit?.(item.id)}>

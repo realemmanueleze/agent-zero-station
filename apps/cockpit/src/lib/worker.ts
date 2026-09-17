@@ -3,18 +3,48 @@ import type { ActivityEvent, ChannelKind, Connection, ParkItem } from "../ui/typ
 const workerUrl = () => process.env.STATION_WORKER_URL ?? "http://127.0.0.1:19174";
 const controlToken = () => process.env.STATION_CONTROL_TOKEN ?? "dev-control-token";
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+export function oauthFailureHtml(message: string): string {
+  return `<!doctype html><html><body><h1>Sign in did not start</h1><p>${escapeHtml(message)}</p><p><a href="/channels/email">Back to email</a></p></body></html>`;
+}
+
+export async function forwardWorkerRedirect(res: Response): Promise<Response> {
+  const headers = new Headers();
+  const location = res.headers.get("location");
+  if (location) {
+    headers.set("location", location);
+  }
+  if (res.status >= 300 && res.status < 400) {
+    return new Response(null, { status: res.status, headers });
+  }
+  const raw = await res.text();
+  let message = raw || `worker returned ${res.status}`;
+  try {
+    const parsed = JSON.parse(raw) as { error?: { message?: string } };
+    if (parsed.error?.message) {
+      message = parsed.error.message;
+    }
+  } catch {
+    // keep raw body
+  }
+  headers.set("content-type", "text/html; charset=utf-8");
+  return new Response(oauthFailureHtml(message), { status: res.status, headers });
+}
+
 export async function workerRedirect(path: string): Promise<Response> {
   const res = await fetch(`${workerUrl()}${path}`, {
     redirect: "manual",
     headers: { authorization: `Bearer ${controlToken()}` },
     cache: "no-store",
   });
-  const headers = new Headers();
-  const location = res.headers.get("location");
-  if (location) {
-    headers.set("location", location);
-  }
-  return new Response(null, { status: res.status, headers });
+  return forwardWorkerRedirect(res);
 }
 
 export async function listLiveConnections(): Promise<Connection[]> {
@@ -41,6 +71,22 @@ export async function workerFetch(
   headers.set("authorization", `Bearer ${controlToken()}`);
   headers.set("content-type", headers.get("content-type") ?? "application/json");
   return fetch(`${workerUrl()}${path}`, { ...init, headers, cache: "no-store" });
+}
+
+export async function workerJson(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ status: number; json: unknown }> {
+  try {
+    const res = await workerFetch(path, init);
+    const json = await res.json().catch(() => ({}));
+    return { status: res.status, json };
+  } catch {
+    return {
+      status: 503,
+      json: { error: { code: "connections.nango_failed", message: "worker down" } },
+    };
+  }
 }
 
 export async function listParkItems(): Promise<ParkItem[]> {
@@ -94,6 +140,19 @@ export async function loadBrief(query = ""): Promise<string> {
     return json.brief ?? "";
   } catch {
     return "";
+  }
+}
+
+export async function loadPacks(): Promise<{ items: string[]; active: string; workerUp: boolean }> {
+  try {
+    const res = await workerFetch("/packs");
+    if (!res.ok) {
+      return { items: [], active: "sales", workerUp: false };
+    }
+    const json = (await res.json()) as { items?: string[]; active?: string };
+    return { items: json.items ?? [], active: json.active ?? "sales", workerUp: true };
+  } catch {
+    return { items: [], active: "sales", workerUp: false };
   }
 }
 

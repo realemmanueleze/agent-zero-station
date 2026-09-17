@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { interpretParkAction, type ParkAction } from "./park-action.ts";
 import type { ParkItem } from "./types.ts";
 
 export function useParkActions(items: ParkItem[]) {
@@ -8,38 +9,44 @@ export function useParkActions(items: ParkItem[]) {
   const [notice, setNotice] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const inflight = useRef(new Set<string>());
   const parked = rows.filter((row) => row.state === "parked");
 
-  const act = useCallback(async (id: string, action: "approve" | "edit" | "kill", body?: string) => {
-    const res = await fetch(`/park/${encodeURIComponent(id)}/${action}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: body ? JSON.stringify({ body }) : undefined,
-    });
-    const json = (await res.json()) as {
-      state?: string;
-      body?: string;
-      error?: { code?: string };
-    };
-    if (json.error?.code) {
-      setNotice(json.error.code);
-      return;
+  const act = useCallback(async (id: string, action: ParkAction, body?: string) => {
+    if (action === "approve") {
+      if (inflight.current.has(id)) {
+        return;
+      }
+      inflight.current.add(id);
+      setBusyId(id);
     }
-    const nextState =
-      json.state ?? (action === "approve" ? "sent" : action === "kill" ? "dropped" : "parked");
-    setRows((current) =>
-      current.map((row) =>
-        row.id === id ? { ...row, state: nextState, body: json.body ?? body ?? row.body } : row,
-      ),
-    );
-    setEditingId(null);
-    setNotice(
-      action === "approve"
-        ? "Sent. Model never called commit_send."
-        : action === "edit"
-          ? "Draft updated. Still parked."
-          : `Marked ${nextState}.`,
-    );
+    try {
+      const result = await interpretParkAction(
+        fetch(`/park/${encodeURIComponent(id)}/${action}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: body ? JSON.stringify({ body }) : undefined,
+        }),
+        action,
+      );
+      if (!result.ok || !result.state) {
+        setNotice(result.notice);
+        return;
+      }
+      setRows((current) =>
+        current.map((row) =>
+          row.id === id ? { ...row, state: result.state ?? row.state, body: result.body ?? body ?? row.body } : row,
+        ),
+      );
+      setEditingId(null);
+      setNotice(result.notice);
+    } finally {
+      if (action === "approve") {
+        inflight.current.delete(id);
+        setBusyId((current) => (current === id ? null : current));
+      }
+    }
   }, []);
 
   const beginEdit = useCallback((item: ParkItem) => {
@@ -47,5 +54,5 @@ export function useParkActions(items: ParkItem[]) {
     setDraft(item.body ?? "");
   }, []);
 
-  return { rows, parked, notice, editingId, draft, setDraft, act, beginEdit, setEditingId };
+  return { rows, parked, notice, editingId, draft, setDraft, act, beginEdit, setEditingId, busyId };
 }

@@ -1,11 +1,35 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { ChannelKind } from "./types.ts";
 
 export function AddSourcePanel({ kind }: { kind: ChannelKind }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [nangoOn, setNangoOn] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/nango/status")
+      .then((res) => res.json() as Promise<{ enabled?: boolean }>)
+      .then((json) => setNangoOn(Boolean(json.enabled)))
+      .catch(() => setNangoOn(false));
+  }, []);
+
+  useEffect(() => {
+    if (!nangoOn) {
+      return;
+    }
+    const pull = (): void => {
+      void fetch("/api/nango/import", { method: "POST" });
+    };
+    const onVisible = (): void => {
+      if (document.visibilityState === "visible") {
+        pull();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [nangoOn]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,16 +65,17 @@ export function AddSourcePanel({ kind }: { kind: ChannelKind }) {
   return (
     <aside className="add-source">
       <h3>Add source</h3>
+      <p className="mute">Sign in when the platform allows it, or paste the fields for this kind. Connecting never sends.</p>
       {kind === "email" ? (
         <>
-          <a className="quiet-pill" href="/oauth/google/start">
+          <a className="quiet-pill" href={nangoOn ? "/nango/start?kind=email" : "/oauth/google/start"}>
             Sign in with Google
           </a>
           <p className="mute">Testing tokens die in 7 days.</p>
         </>
       ) : null}
       {kind === "slack" ? (
-        <a className="quiet-pill" href="/oauth/slack/start">
+        <a className="quiet-pill" href={nangoOn ? "/nango/start?kind=slack" : "/oauth/slack/start"}>
           Sign in with Slack
         </a>
       ) : null}

@@ -1,0 +1,233 @@
+/** @vitest-environment jsdom */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createDeskFixture, deskFixtureFetch } from "./desk-fixture.ts";
+import { deskViewport } from "./desk-viewport.ts";
+import { AddSourcePanel } from "./AddSourcePanel.tsx";
+import { PacksDeck } from "./PacksDeck.tsx";
+import { ParkQueue } from "./ParkQueue.tsx";
+import { StationShell } from "./StationShell.tsx";
+import { applyTheme, cycleTheme, readStoredTheme, themeLabel, THEMES, type ThemeName } from "./theme.ts";
+import type { ParkItem } from "./types.ts";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+}));
+
+const parked: ParkItem = {
+  id: "park-1",
+  state: "parked",
+  channel: "email",
+  accountId: "one@gmail.com",
+  tenantId: "tenant-a",
+  packId: "sales",
+  from: "ada@northwind.io",
+  subject: "Need a quote",
+  body: "Can you send twelve seats?",
+};
+
+function mockFetch(fixture: ReturnType<typeof createDeskFixture>, delayMs = 0): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+      return deskFixtureFetch(fixture, input, init);
+    }),
+  );
+}
+
+describe("T31 desk behavior", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    applyTheme("system");
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("edits, cancels, then saves a draft", async () => {
+    const fixture = createDeskFixture();
+    mockFetch(fixture);
+    render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit draft" }));
+    const box = screen.getByLabelText("Edit draft");
+    fireEvent.change(box, { target: { value: "twelve seats, revised" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(document.querySelector(".park-card .body")?.textContent).toBe("Can you send twelve seats?");
+    fireEvent.click(screen.getByRole("button", { name: "Edit draft" }));
+    fireEvent.change(screen.getByLabelText("Edit draft"), { target: { value: "twelve seats, revised" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(document.querySelector(".park-card .body")?.textContent).toBe("twelve seats, revised"));
+    expect(screen.getByText(/Still parked/)).toBeTruthy();
+    expect(fixture.items[0]?.state).toBe("parked");
+  });
+
+  it("approve success, failure, and double-click send once", async () => {
+    const ok = createDeskFixture();
+    mockFetch(ok, 40);
+    const first = render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
+    await waitFor(() => expect(screen.getByText(/Sent/)).toBeTruthy());
+    expect(ok.approveCalls).toBe(1);
+    expect(ok.items[0]?.state).toBe("sent");
+    first.unmount();
+
+    const fail = createDeskFixture({ mode: "approve-fail" });
+    mockFetch(fail);
+    render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
+    await waitFor(() => expect(screen.getByText("send.provider_failed")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Approve send" })).toBeTruthy();
+  });
+
+  it("kill marks the row dropped", async () => {
+    const fixture = createDeskFixture();
+    mockFetch(fixture);
+    render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Kill" }));
+    await waitFor(() => expect(screen.getByText(/Marked dropped/)).toBeTruthy());
+    expect(fixture.items[0]?.state).toBe("dropped");
+  });
+
+  it("keyboard E then A then K hits the first parked card", async () => {
+    const editFix = createDeskFixture();
+    mockFetch(editFix);
+    const editView = render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.keyDown(window, { key: "e" });
+    expect(screen.getByLabelText("Edit draft")).toBeTruthy();
+    editView.unmount();
+
+    const killFix = createDeskFixture();
+    mockFetch(killFix);
+    render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.keyDown(window, { key: "k" });
+    await waitFor(() => expect(screen.getByText(/Marked dropped/)).toBeTruthy());
+  });
+
+  it("keyboard A approves once through the mock", async () => {
+    const fixture = createDeskFixture();
+    mockFetch(fixture);
+    render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.keyDown(window, { key: "a" });
+    fireEvent.keyDown(window, { key: "a" });
+    await waitFor(() => expect(screen.getByText(/Sent/)).toBeTruthy());
+    expect(fixture.approveCalls).toBe(1);
+  });
+
+  it("network and malformed responses stay parked", async () => {
+    const net = createDeskFixture({ mode: "network" });
+    mockFetch(net);
+    const first = render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
+    await waitFor(() => expect(screen.getByText("park.failed")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Approve send" })).toBeTruthy();
+    first.unmount();
+
+    const bad = createDeskFixture({ mode: "malformed" });
+    mockFetch(bad);
+    render(<ParkQueue items={[{ ...parked }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Kill" }));
+    await waitFor(() => expect(screen.getByText(/park\.failed/)).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Approve send" })).toBeTruthy();
+  });
+
+  it("packs remount on the mocked active pack", async () => {
+    const fixture = createDeskFixture({ active: "inbox-triage" });
+    mockFetch(fixture);
+    const first = render(<PacksDeck initialActive={fixture.active} />);
+    expect(screen.getByText(/Active: inbox-triage/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /sales/i }));
+    await waitFor(() => expect(screen.getByText(/Active pack is sales/)).toBeTruthy());
+    first.unmount();
+    render(<PacksDeck initialActive={fixture.active} />);
+    expect(screen.getByText(/Active: sales/)).toBeTruthy();
+  });
+
+  it("cycles every theme and names mobile tablet desktop", () => {
+    expect(deskViewport(390)).toBe("mobile");
+    expect(deskViewport(834)).toBe("tablet");
+    expect(deskViewport(1280)).toBe("desktop");
+    render(
+      <StationShell title="Action: desk">
+        <p>body</p>
+      </StationShell>,
+    );
+    expect(document.querySelector("[data-desk-layout]")).toBeTruthy();
+    let theme: ThemeName = "system";
+    for (const next of THEMES) {
+      applyTheme(next);
+      theme = next;
+      if (next === "system") {
+        expect(document.documentElement.dataset.theme).toBeUndefined();
+      } else {
+        expect(document.documentElement.dataset.theme).toBe(next);
+      }
+    }
+    expect(cycleTheme(theme)).toBe("system");
+    fireEvent.click(screen.getByRole("button", { name: /theme|Light|Dark|High contrast|Auto/i }));
+    expect(document.documentElement.dataset.theme === "light" || document.documentElement.dataset.theme === undefined).toBe(
+      true,
+    );
+  });
+
+  it("readStoredTheme maps default and unknown and survives blocked storage", () => {
+    localStorage.setItem("station-theme", "default");
+    expect(readStoredTheme()).toBe("system");
+    localStorage.setItem("station-theme", "neon");
+    expect(readStoredTheme()).toBe("system");
+    localStorage.setItem("station-theme", "dark");
+    expect(readStoredTheme()).toBe("dark");
+    const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    expect(readStoredTheme()).toBe("system");
+    spy.mockRestore();
+    expect(themeLabel("light")).toBe("Light");
+    expect(themeLabel("high-contrast")).toBe("High contrast");
+    expect(themeLabel("system")).toBe("Auto theme");
+  });
+
+  it("pack activate failure stays on the current pack", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { code: "pack.activate_failed" } }), { status: 503 })),
+    );
+    render(<PacksDeck initialActive="sales" />);
+    fireEvent.click(screen.getByRole("button", { name: /inbox-triage/i }));
+    await waitFor(() => expect(screen.getByText("pack.activate_failed")).toBeTruthy());
+    expect(screen.getByText(/Active: sales/)).toBeTruthy();
+  });
+
+  it("worker-down and empty park queue announce named screen states", () => {
+    render(<ParkQueue items={[]} workerUp={false} />);
+    expect(screen.getByRole("alert").textContent).toMatch(/Worker is not reachable/);
+    expect(screen.getByText("Nothing parked")).toBeTruthy();
+  });
+
+  it("paste errors stay on the add-source panel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/nango/status")) {
+          return new Response(JSON.stringify({ enabled: false }));
+        }
+        if (url.includes("/api/connections")) {
+          return new Response(JSON.stringify({ error: { message: "could not save mailbox" } }), { status: 400 });
+        }
+        return new Response("{}", { status: 500 });
+      }),
+    );
+    render(<AddSourcePanel kind="email" />);
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(screen.getByText("could not save mailbox")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
+  });
+});

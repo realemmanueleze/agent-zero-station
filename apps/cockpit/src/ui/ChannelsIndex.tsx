@@ -1,21 +1,25 @@
 import { StationShell } from "./StationShell.tsx";
-import { channelKinds, connectionsFor } from "./workspace.ts";
-import type { ParkItem } from "./types.ts";
+import { channelKinds, mergeLiveConnections } from "./workspace.ts";
+import type { Connection, ParkItem } from "./types.ts";
 
-export function ChannelsIndex({ items }: { items: ParkItem[] }) {
+export function ChannelsIndex({ items, live = [] }: { items: ParkItem[]; live?: Connection[] }) {
   const waiting = items.filter((item) => item.state === "parked").length;
+  const sources = mergeLiveConnections(live);
   return (
     <StationShell title="Channels: every signal source" waiting={waiting}>
       <main className="work">
-        <ul className="channel-grid">
+        <p className="note">Pick a kind, then add as many accounts as you run. Each one is isolated.</p>
+        <ul className="source-roster">
           {channelKinds.map((kind) => {
-            const rows = connectionsFor(kind);
+            const rows = sources.filter((row) => row.kind === kind);
             return (
               <li key={kind}>
-                <a className="channel-card" href={`/channels/${kind}`}>
+                <a href={`/channels/${kind}`}>
                   <strong>{kind}</strong>
-                  <small>{rows.length === 1 ? "1 connection" : `${rows.length} connections`}</small>
-                  <span>{rows.map((row) => row.account).join(" · ") || "none"}</span>
+                  <span>
+                    {rows.length === 1 ? "1 connection" : `${rows.length} connections`}
+                    {rows.length ? ` · ${rows.map((row) => row.account).join(" · ")}` : ""}
+                  </span>
                 </a>
               </li>
             );

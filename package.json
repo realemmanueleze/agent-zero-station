@@ -10,17 +10,25 @@
     "test:tickets": "vitest run --config vitest.tickets.config.ts",
     "eval:recorded": "vitest run --config vitest.eval.config.ts",
     "eval:live": "echo 'nightly evals not wired yet' && exit 0",
-    "replay": "tsx apps/cli/src/main.ts replay --mode recorded fixtures/sales-week.jsonl sales"
+    "replay": "tsx apps/cli/src/main.ts replay --mode recorded fixtures/sales-week.jsonl sales",
+    "typecheck:cockpit": "pnpm --filter @station/cockpit exec tsc --noEmit --pretty false",
+    "build:cockpit": "NEXT_TELEMETRY_DISABLED=1 NEXT_DIST_DIR=.next-build pnpm --filter @station/cockpit build",
+    "test:t31": "vitest run tests/tickets/T31-desk-behavior.test.ts --testTimeout=60000",
+    "smoke:compose": "sh scripts/compose-fixture-smoke.sh"
   },
   "dependencies": {
     "@station/runtime": "workspace:*"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.3.0",
     "concurrently": "^9.2.1",
+    "jsdom": "^30.0.1",
+    "playwright": "^1.63.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
