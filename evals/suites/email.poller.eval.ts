@@ -36,8 +36,6 @@ describe("email.poller (gate: merge)", () => {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
       });
-      const started = await runtime.station.worker.startLiveProducers("eval-w");
-      expect(started.started).toBeGreaterThanOrEqual(1);
       const park = await fetch(`http://127.0.0.1:${runtime.workerPort}/park`, {
         headers: { authorization: `Bearer ${token}` },
       });

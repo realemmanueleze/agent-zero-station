@@ -41,8 +41,7 @@ describe("T17 email poller", () => {
     const bound = await station.worker.listen({ host: "127.0.0.1", token: "t17" });
     try {
       await pasteLive(bound.port, "poll@acme.com");
-      const result = await station.worker.startLiveProducers("w1");
-      expect(result.started).toBe(1);
+      expect(await station.worker.producerStartCount("email:poll@acme.com")).toBe(1);
       const listed = await station.cockpit.parkList({ host: "127.0.0.1" });
       const items = (listed.json as { items: Array<{ accountId?: string; state: string }> }).items;
       expect(items.some((row) => row.accountId === "poll@acme.com" && row.state === "parked")).toBe(
@@ -63,7 +62,6 @@ describe("T17 email poller", () => {
     const bound = await station.worker.listen({ host: "127.0.0.1", token: "t17" });
     try {
       await pasteLive(bound.port, "tick@acme.com");
-      await station.worker.startLiveProducers("w1");
       expect(await station.worker.producerTickCount("email:tick@acme.com")).toBeGreaterThanOrEqual(1);
       await new Promise((resolve) => setTimeout(resolve, 40));
       expect(await station.worker.producerTickCount("email:tick@acme.com")).toBeGreaterThanOrEqual(2);
@@ -83,8 +81,10 @@ describe("T17 email poller", () => {
       for (let i = 0; i < 26; i += 1) {
         await pasteLive(bound.port, `box${i}@acme.com`);
       }
+      expect(await station.worker.producerStartCount("email:box24@acme.com")).toBe(1);
+      expect(await station.worker.producerStartCount("email:box25@acme.com")).toBe(0);
       const result = await station.worker.startLiveProducers("w1");
-      expect(result.started).toBe(25);
+      expect(result.started).toBe(0);
       expect(result.skipped).toBe(1);
     } finally {
       await bound.close();
@@ -101,8 +101,6 @@ describe("T17 email poller", () => {
     try {
       await pasteLive(bound.port, "boom@acme.com");
       await pasteLive(bound.port, "ok@acme.com");
-      const result = await station.worker.startLiveProducers("w1");
-      expect(result.started).toBeGreaterThanOrEqual(1);
       const listed = await station.cockpit.parkList({ host: "127.0.0.1" });
       const items = (listed.json as { items: Array<{ accountId?: string }> }).items;
       expect(items.some((row) => row.accountId === "ok@acme.com")).toBe(true);

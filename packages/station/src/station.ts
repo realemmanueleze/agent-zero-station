@@ -92,6 +92,19 @@ function isLocalHost(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host === "::1";
 }
 
+function vaultMutationArmsProducers(path: string, method: string): boolean {
+  if (method !== "POST") {
+    return false;
+  }
+  if (path === "/nango/complete" || path === "/nango/import" || path === "/nango/webhook") {
+    return true;
+  }
+  if (path === "/connections") {
+    return true;
+  }
+  return /^\/connections\/[^/]+\/test$/.test(path);
+}
+
 export class Station implements StationApi {
   private migrated = false;
   private env: Record<string, string | undefined> = {};
@@ -520,15 +533,20 @@ export class Station implements StationApi {
         .list()
         .filter((row) => (row.kind === "email" || row.kind === "slack") && row.status === "live");
       const cap = stationConfig.mailProducerCap;
+      const running = [...this.producerStarts.values()].filter((count) => count > 0).length;
       let started = 0;
       let skipped = 0;
       for (const row of live) {
-        if (started >= cap) {
+        const producerRef = `${row.kind}:${row.account}`;
+        if ((this.producerStarts.get(producerRef) ?? 0) > 0) {
+          continue;
+        }
+        if (running + started >= cap) {
           skipped += 1;
           continue;
         }
         try {
-          const result = await this.worker.startProducer(`${row.kind}:${row.account}`, workerId);
+          const result = await this.worker.startProducer(producerRef, workerId);
           if (result.started) {
             started += 1;
           }
@@ -1044,6 +1062,9 @@ export class Station implements StationApi {
           })
         ) {
           await this.persistLedger();
+          if (vaultMutationArmsProducers(path, req.method ?? "GET")) {
+            await this.worker.startLiveProducers("connect");
+          }
           return;
         }
         const parkAction = path.match(/^\/park\/([^/]+)\/(approve|edit|kill)/);

@@ -14,18 +14,6 @@
 **Priority:** P2
 **Depends on:** T15 Add source landed; `/privacy` ships in the kit. Point Google at `https://<your-host>/privacy`.
 
-### Arm pollers when Nango connect completes
-
-**What:** Start `email:` / `slack:` producers when webhook, import, or complete marks a row live, instead of only at worker boot.
-
-**Why:** A mailbox connected after boot stays live with no inbound park until restart. Approve has nothing to do.
-
-**Context:** Adversarial review on T28–T31. `startLiveProducers` runs once in `apps/worker`. `pollProducer` also swallows tick errors. Pair with a visible error status if poll 502s.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** T30 Nango runtime landed.
-
 ### OpenAPI for the command API
 
 **What:** Publish an OpenAPI document (and optional SDK) for `GET /park` and `POST /park/:id/{approve,edit,kill}`.
@@ -63,3 +51,7 @@
 **Depends on:** None.
 
 ## Completed
+
+### Arm pollers when Nango connect completes (0.2.0.0, 2026-09-18)
+
+Vault POST complete/import/webhook/connections/test now calls `startLiveProducers("connect")`. T30 and T25 prove post-boot complete/paste parks inbound without restart. Poll tick still swallows errors; no operator poll-502 surface yet.

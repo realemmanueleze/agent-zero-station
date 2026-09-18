@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { scoringTurnCallsCommitSend } from "@station/loop";
+import { getStation } from "@station/api";
 import { inboundDecisionId } from "../../packages/station/src/email-producer.ts";
 import { approveWithConnection, ConnectionStore } from "../../packages/station/src/connections.ts";
 import { completeNangoConnection } from "../../packages/station/src/nango.ts";
@@ -315,5 +316,36 @@ describe("T30 Nango runtime", () => {
         fetchImpl: async () => ({ status: 200, json: async () => ({ id: "should-not-send" }) }),
       }),
     ).rejects.toMatchObject({ code: "connections.invalid" });
+  });
+
+  it("nango complete after boot parks inbound without a second startLiveProducers", async () => {
+    const station = getStation({ seed: false });
+    station.config.load({
+      STATION_MASTER_KEY: MASTER,
+      NANGO_SECRET_KEY: SECRET,
+      STATION_DATABASE_URL: "memory://t30-arm",
+    });
+    const bound = await station.worker.listen({ host: "127.0.0.1", token: "t30-arm" });
+    try {
+      await station.worker.startLiveProducers("boot");
+      const complete = await fetch(`http://127.0.0.1:${bound.port}/nango/complete`, {
+        method: "POST",
+        headers: { authorization: "Bearer t30-arm", "content-type": "application/json" },
+        body: JSON.stringify({
+          connectionId: "conn-after",
+          integration: "google-mail",
+          account: "after@gmail.com",
+        }),
+      });
+      expect(complete.status).toBe(200);
+      const park = await fetch(`http://127.0.0.1:${bound.port}/park`, {
+        headers: { authorization: "Bearer t30-arm" },
+      });
+      const json = (await park.json()) as { items: Array<{ accountId?: string }> };
+      expect(json.items.some((row) => row.accountId === "after@gmail.com")).toBe(true);
+      expect(await station.worker.producerStartCount("email:after@gmail.com")).toBe(1);
+    } finally {
+      await bound.close();
+    }
   });
 });
