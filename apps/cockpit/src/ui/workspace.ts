@@ -54,6 +54,13 @@ export function connections(): Connection[] {
   return seedConnections();
 }
 
+export function sourceCaption(row: Connection): string {
+  if (/^[A-Z][A-Z0-9_]{2,}$/.test(row.account)) {
+    return row.label;
+  }
+  return row.account;
+}
+
 export function mergeLiveConnections(
   live: Array<{
     id: string;

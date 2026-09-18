@@ -21,7 +21,7 @@ export function ActionDeck({
   const sourceCount = sources.length;
   const latest = items[0];
   return (
-    <StationShell title="Action: everything that needs a human" waiting={waiting}>
+    <StationShell title="Everything that needs a human" waiting={waiting}>
       <section className="desk-strip" aria-label="desk status">
         <a className="desk-hero" href="#needs-you">
           <strong>{waiting}</strong>

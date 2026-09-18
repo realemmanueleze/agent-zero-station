@@ -7,6 +7,7 @@ import { deskViewport } from "./desk-viewport.ts";
 import { AddSourcePanel } from "./AddSourcePanel.tsx";
 import { PacksDeck } from "./PacksDeck.tsx";
 import { ParkQueue } from "./ParkQueue.tsx";
+import { ConnectionView } from "./ConnectionView.tsx";
 import { StationShell } from "./StationShell.tsx";
 import { applyTheme, cycleTheme, readStoredTheme, themeLabel, THEMES, type ThemeName } from "./theme.ts";
 import type { ParkItem } from "./types.ts";
@@ -72,8 +73,8 @@ describe("T31 desk behavior", () => {
     const ok = createDeskFixture();
     mockFetch(ok, 40);
     const first = render(<ParkQueue items={[{ ...parked }]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
-    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(screen.getByText(/Sent/)).toBeTruthy());
     expect(ok.approveCalls).toBe(1);
     expect(ok.items[0]?.state).toBe("sent");
@@ -82,9 +83,9 @@ describe("T31 desk behavior", () => {
     const fail = createDeskFixture({ mode: "approve-fail" });
     mockFetch(fail);
     render(<ParkQueue items={[{ ...parked }]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(screen.getByText("send.provider_failed")).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Approve send" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
   });
 
   it("kill marks the row dropped", async () => {
@@ -125,9 +126,9 @@ describe("T31 desk behavior", () => {
     const net = createDeskFixture({ mode: "network" });
     mockFetch(net);
     const first = render(<ParkQueue items={[{ ...parked }]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Approve send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(screen.getByText("park.failed")).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Approve send" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
     first.unmount();
 
     const bad = createDeskFixture({ mode: "malformed" });
@@ -135,7 +136,7 @@ describe("T31 desk behavior", () => {
     render(<ParkQueue items={[{ ...parked }]} />);
     fireEvent.click(screen.getByRole("button", { name: "Kill" }));
     await waitFor(() => expect(screen.getByText(/park\.failed/)).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Approve send" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
   });
 
   it("packs remount on the mocked active pack", async () => {
@@ -229,5 +230,55 @@ describe("T31 desk behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(screen.getByText("could not save mailbox")).toBeTruthy());
     expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
+  });
+
+  it("keeps the Action waiting chip when Packs is given a waiting count", () => {
+    render(<PacksDeck initialActive="sales" waiting={2} />);
+    expect(document.querySelector(".waiting-chip")?.textContent).toBe("2");
+  });
+
+  it("does not scrape a dollar amount from draft text", () => {
+    render(
+      <ParkQueue
+        items={[
+          {
+            ...parked,
+            subject: "Draft quote · $12,400",
+            body: "Estimated contract $12400.",
+          },
+        ]}
+      />,
+    );
+    expect(document.querySelector(".amount")).toBeNull();
+  });
+
+  it("connection log uses scoped ledger rows when worker events miss the account", () => {
+    render(
+      <ConnectionView
+        kind="email"
+        connection={{
+          id: "gmail-work",
+          kind: "email",
+          label: "gmail — work@acme.com",
+          account: "work@acme.com",
+          detail: "isolated",
+          status: "isolated",
+        }}
+        items={[{ ...parked, accountId: "work@acme.com", subject: "Draft quote" }]}
+        events={[
+          {
+            id: "decision-park-1",
+            at: "",
+            channel: "email",
+            account: "jordan@northwind.io",
+            action: "parked",
+            signalId: "park-1",
+            detail: "Draft quote",
+          },
+        ]}
+      />,
+    );
+    expect(document.querySelector(".loop")?.textContent).toMatch(/parked · Draft quote/);
+    expect(document.querySelector(".loop")?.textContent).not.toMatch(/No ledger rows yet/);
   });
 });

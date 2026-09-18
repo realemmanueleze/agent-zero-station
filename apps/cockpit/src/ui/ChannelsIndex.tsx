@@ -1,12 +1,12 @@
 import { StationShell } from "./StationShell.tsx";
-import { channelKinds, mergeLiveConnections } from "./workspace.ts";
+import { channelKinds, mergeLiveConnections, sourceCaption } from "./workspace.ts";
 import type { Connection, ParkItem } from "./types.ts";
 
 export function ChannelsIndex({ items, live = [] }: { items: ParkItem[]; live?: Connection[] }) {
   const waiting = items.filter((item) => item.state === "parked").length;
   const sources = mergeLiveConnections(live);
   return (
-    <StationShell title="Channels: every signal source" waiting={waiting}>
+    <StationShell title="Every signal source" waiting={waiting}>
       <main className="work">
         <p className="note">Pick a kind, then add as many accounts as you run. Each one is isolated.</p>
         <ul className="source-roster">
@@ -18,7 +18,7 @@ export function ChannelsIndex({ items, live = [] }: { items: ParkItem[]; live?: 
                   <strong>{kind}</strong>
                   <span>
                     {rows.length === 1 ? "1 connection" : `${rows.length} connections`}
-                    {rows.length ? ` · ${rows.map((row) => row.account).join(" · ")}` : ""}
+                    {rows.length ? ` · ${rows.map((row) => sourceCaption(row)).join(" · ")}` : ""}
                   </span>
                 </a>
               </li>

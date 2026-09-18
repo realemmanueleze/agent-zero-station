@@ -9,7 +9,7 @@ function isPackId(value: string): value is PackId {
   return (listPackIds() as string[]).includes(value);
 }
 
-export function PacksDeck({ initialActive }: { initialActive: PackId }) {
+export function PacksDeck({ initialActive, waiting = 0 }: { initialActive: PackId; waiting?: number }) {
   const [active, setActive] = useState<PackId>(initialActive);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function PacksDeck({ initialActive }: { initialActive: PackId }) {
   }
 
   return (
-    <StationShell title="Packs: switch the scoring brain">
+    <StationShell title="Switch the scoring brain" waiting={waiting}>
       <main className="work stack">
         <p className="note">Active: {active}. Replay the same signals after you switch.</p>
         <ul className="source-roster">

@@ -15,7 +15,7 @@ export function ChannelKindView({
   const rows = mergeLiveConnections(live).filter((row) => row.kind === kind);
   const waiting = items.filter((item) => item.state === "parked").length;
   return (
-    <StationShell title={`${kind}: connections`} waiting={waiting}>
+    <StationShell title={`${kind} connections`} waiting={waiting}>
       <main className="work kind-layout">
         <div>
           <p className="note">

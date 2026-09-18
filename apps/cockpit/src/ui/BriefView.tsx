@@ -24,7 +24,7 @@ export function BriefView({
     !query && initialBrief ? initialBrief : generateBrief(items, activity, query);
   const waiting = items.filter((item) => item.state === "parked").length;
   return (
-    <StationShell title="Brief: ask the workspace" waiting={waiting}>
+    <StationShell title="Ask the workspace" waiting={waiting}>
       <main className="work stack brief-layout">
         <form
           className="brief-form"
@@ -34,7 +34,7 @@ export function BriefView({
         >
           <input
             aria-label="Query workspace"
-            placeholder="northwind, slack, parked…"
+            placeholder="Ask the ledger…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

@@ -185,6 +185,7 @@ button:active:not(:disabled) {
   width: 100%;
   border-radius: 0.7rem;
   padding: 0.55rem 0.75rem;
+  min-height: 44px;
 }
 
 .pack.on {
@@ -202,8 +203,8 @@ button:active:not(:disabled) {
   justify-content: center;
   border-radius: 999px;
   background: var(--park-border);
-  color: #1a100a;
-  font-size: 0.68rem;
+  color: var(--bg);
+  font-size: 0.75rem;
   font-weight: 600;
   font-family: var(--mono);
 }
@@ -229,6 +230,11 @@ button:active:not(:disabled) {
   letter-spacing: -0.03em;
   font-weight: 600;
   max-width: 46rem;
+}
+
+.top-actions button,
+.command-launch {
+  min-height: 44px;
 }
 
 .command-launch {
@@ -351,12 +357,12 @@ button:active:not(:disabled) {
 
 .brief {
   white-space: pre-wrap;
-  font-family: var(--mono);
-  font-size: 0.86rem;
+  font-family: var(--sans);
+  font-size: 0.95rem;
   line-height: 1.55;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--surface-2);
   padding: 1.1rem 1.2rem;
   overflow: auto;
 }
@@ -506,9 +512,9 @@ h2 {
   width: 100%;
   min-height: 6rem;
   resize: vertical;
-  background: color-mix(in srgb, var(--bg) 70%, black);
+  background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   padding: 0.7rem;
   font-family: var(--mono);
@@ -532,12 +538,13 @@ h2 {
   background: transparent;
   color: var(--ink);
   border-color: var(--line);
+  min-height: 44px;
 }
 
 .hitl button:first-child {
-  background: var(--ink);
+  background: var(--park-border);
   color: var(--bg);
-  border-color: var(--ink);
+  border-color: var(--park-border);
   font-weight: 560;
 }
 
@@ -588,7 +595,7 @@ h2 {
 
 .inbox em {
   font-style: normal;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--mute);
@@ -840,4 +847,55 @@ a.quiet-pill[href*="nango"] {
   .desk-hero strong {
     font-size: 2rem;
   }
+}
+
+.login-desk {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.25rem;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.login-desk form {
+  width: min(24rem, 100%);
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.4rem 1.35rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: var(--shadow);
+}
+
+.login-desk h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+}
+
+.login-desk label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+}
+
+.login-desk input {
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.login-desk button {
+  min-height: 44px;
+  border: 1px solid var(--park-border);
+  border-radius: 999px;
+  background: var(--park-border);
+  color: var(--bg);
+  font-weight: 560;
+  cursor: pointer;
 }

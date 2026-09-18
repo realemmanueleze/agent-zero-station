@@ -8,15 +8,17 @@ export function AccountsDeck({
   mailboxes,
   connections = [],
   workerUp = true,
+  waiting = 0,
 }: {
   mailboxes: Mailbox[];
   connections?: Connection[];
   workerUp?: boolean;
+  waiting?: number;
 }) {
   const live = connections.filter((row) => row.kind === "email");
   const empty = live.length === 0 && mailboxes.length === 0;
   return (
-    <StationShell title="Accounts: mailbox rows">
+    <StationShell title="Mailbox rows" waiting={waiting}>
       <main className="work stack">
         <p className="note">
           Live rows come from the connections vault. Config mailboxes remain as seed labels. Open

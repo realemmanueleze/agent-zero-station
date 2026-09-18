@@ -14,7 +14,7 @@ async function see(locator: Locator): Promise<void> {
 }
 
 async function doubleClickApprove(page: PlaywrightPage): Promise<void> {
-  const approve = page.getByRole("button", { name: "Approve send" });
+  const approve = page.getByRole("button", { name: "Approve" });
   await see(approve);
   await approve.click();
   await approve.click({ force: true }).catch(() => undefined);
@@ -111,9 +111,9 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     worker.fixture.mode = "approve-fail";
     const fail = await open();
     try {
-      await fail.page.getByRole("button", { name: "Approve send" }).click();
+      await fail.page.getByRole("button", { name: "Approve" }).click();
       await see(fail.page.getByText("send.provider_failed"));
-      await see(fail.page.getByRole("button", { name: "Approve send" }));
+      await see(fail.page.getByRole("button", { name: "Approve" }));
       expect(worker.fixture.items[0]?.state).toBe("parked");
     } finally {
       await fail.context.close();
@@ -162,7 +162,7 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     const net = await open();
     try {
       worker.fixture.mode = "network";
-      await net.page.getByRole("button", { name: "Approve send" }).click();
+      await net.page.getByRole("button", { name: "Approve" }).click();
       await see(net.page.getByText(/park\.failed|Worker is not reachable/i));
       await see(net.page.locator(".park-card"));
     } finally {
@@ -175,7 +175,7 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     try {
       await bad.page.getByRole("button", { name: "Kill" }).click();
       await see(bad.page.getByText(/park\.(failed|invalid)/));
-      await see(bad.page.getByRole("button", { name: "Approve send" }));
+      await see(bad.page.getByRole("button", { name: "Approve" }));
     } finally {
       await bad.context.close();
     }
@@ -283,6 +283,32 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
       await expect.poll(async () => link.getAttribute("href")).toBe("/nango/start?kind=slack");
     } finally {
       await slack.context.close();
+    }
+  });
+
+  it("login is a password card, not the desk grid", async () => {
+    const context = await browser.newContext({
+      viewport: { width: widths.desktop, height: 900 },
+      baseURL: cockpit.url,
+    });
+    const page = await context.newPage();
+    try {
+      await page.goto("/login", { waitUntil: "domcontentloaded", timeout: 60_000 });
+      await page.locator(".login-desk").waitFor({ timeout: 60_000 });
+      expect(await page.locator(".nav-rail").count()).toBe(0);
+      expect(await page.getByText("STATION_COCKPIT_PASSWORD").count()).toBe(0);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it("Packs keeps the Action waiting chip", async () => {
+    const { context, page } = await open("/packs");
+    try {
+      await see(page.locator(".waiting-chip"));
+      expect(await page.locator(".waiting-chip").textContent()).toBe("1");
+    } finally {
+      await context.close();
     }
   });
 });

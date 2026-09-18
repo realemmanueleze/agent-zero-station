@@ -20,9 +20,17 @@ export function ConnectionView({
   workerUp?: boolean;
 }) {
   const scoped = itemsForConnection(items, kind, connection.account);
-  const activity = (events ?? activityFromLedger(items)).filter(
-    (row) => row.channel === kind && row.account === connection.account,
-  );
+  const scopedLedger = activityFromLedger(scoped);
+  const fromEvents = (events ?? []).filter((row) => {
+    if (row.channel !== kind) {
+      return false;
+    }
+    if (row.account === connection.account) {
+      return true;
+    }
+    return scoped.some((item) => item.id === row.signalId || row.id === `decision-${item.id}`);
+  });
+  const activity = fromEvents.length > 0 ? fromEvents : scopedLedger;
   const waiting = scoped.filter((item) => item.state === "parked").length;
   return (
     <StationShell title={connection.label} waiting={waiting}>

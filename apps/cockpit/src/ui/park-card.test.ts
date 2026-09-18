@@ -18,9 +18,21 @@ const item = {
 describe("T9 Next cockpit primitives", () => {
   it("ParkCard renders Approve, Edit, and Kill", () => {
     const html = renderParkCardHtml(item);
-    expect(html).toMatch(/Approve|approve/i);
+    expect(html).toContain(">Approve<");
+    expect(html).not.toContain(">Approve send<");
     expect(html).toMatch(/Edit|edit/i);
     expect(html).toMatch(/Kill|kill/i);
+  });
+
+  it("ParkCard money comes only from typed amount", () => {
+    const scraped = renderParkCardHtml({
+      ...item,
+      subject: "Draft quote · $12,400",
+      body: "Estimated contract $12400.",
+    });
+    expect(scraped).not.toContain('class="amount"');
+    const typed = renderParkCardHtml({ ...item, amount: 12400 });
+    expect(typed).toContain("$12,400");
   });
 
   it("ParkCard never contains a control token", () => {

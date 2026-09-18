@@ -139,7 +139,6 @@ export function StationShell({
   }
 
   const split = title.indexOf(": ");
-  const kicker = split > 0 ? title.slice(0, split) : "Station";
   const headline = split > 0 ? title.slice(split + 2) : title;
 
   return (
@@ -174,10 +173,7 @@ export function StationShell({
       <div className="station-body">
         <header className="top">
           <div className="shell-title">
-            <h2>
-              {kicker !== "Station" ? `${kicker}: ` : ""}
-              {headline}
-            </h2>
+            <h2>{headline}</h2>
           </div>
           <div className="top-actions">
             <button type="button" className="command-launch" onClick={() => setPalette(true)}>

@@ -25,7 +25,7 @@ export function ActivityView({
   const activity = events ?? activityFromLedger(items);
   const waiting = items.filter((item) => item.state === "parked").length;
   return (
-    <StationShell title="Activity: every action taken" waiting={waiting}>
+    <StationShell title="Every action taken" waiting={waiting}>
       <main className="work stack">
         <p className="note">Received, watched, queried, and decided. Ledger only. Nothing invented.</p>
         {!workerUp ? (
@@ -47,7 +47,7 @@ export function ActivityView({
                 <span>
                   {row.action}: {row.detail}
                 </span>
-                <em>{row.at}</em>
+                {row.at ? <em>{row.at}</em> : null}
               </li>
             ))}
           </ul>

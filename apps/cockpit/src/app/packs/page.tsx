@@ -1,5 +1,5 @@
 import { listPackIds, type PackId } from "@station/packs";
-import { loadPacks } from "../../lib/worker.ts";
+import { loadPacks, loadPark } from "../../lib/worker.ts";
 import { PacksDeck } from "../../ui/PacksDeck.tsx";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +9,7 @@ function asPackId(value: string): PackId {
 }
 
 export default async function PacksPage() {
-  const { active } = await loadPacks();
-  return <PacksDeck initialActive={asPackId(active)} />;
+  const [{ active }, { items }] = await Promise.all([loadPacks(), loadPark()]);
+  const waiting = items.filter((item) => item.state === "parked").length;
+  return <PacksDeck initialActive={asPackId(active)} waiting={waiting} />;
 }

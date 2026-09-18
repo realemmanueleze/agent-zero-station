@@ -8,12 +8,8 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function inferredAmount(item: ParkItem): number | undefined {
-  if (item.amount) {
-    return item.amount;
-  }
-  const match = (item.body ?? item.subject ?? "").match(/\$(\d[\d,]*)/);
-  return match ? Number(match[1].replaceAll(",", "")) : undefined;
+function typedAmount(item: ParkItem): number | undefined {
+  return typeof item.amount === "number" ? item.amount : undefined;
 }
 
 function channelOf(item: ParkItem): string {
@@ -22,18 +18,18 @@ function channelOf(item: ParkItem): string {
 
 export function renderParkCardHtml(item: ParkItem): string {
   const title = item.subject ?? item.body ?? item.id;
-  const amount = inferredAmount(item);
+  const amount = typedAmount(item);
   const risk = amount && amount >= 10_000 ? "high" : "normal";
   const why =
     item.rationale ??
-    "Fixture park. Approve sends through the worker. The model cannot commit_send.";
+    "Fixture park. Approve goes through the worker. The model cannot send.";
   return `<article class="park-card" data-decision="${escapeHtml(item.id)}" data-risk="${risk}" data-channel="${escapeHtml(channelOf(item))}">
-  <h3>${escapeHtml(title)}</h3>
+  <div class="card-title"><h3>${escapeHtml(title)}</h3>${amount ? `<span class="amount">$${amount.toLocaleString()}</span>` : ""}</div>
   <p class="meta">${escapeHtml(channelOf(item))} · ${escapeHtml(item.packId ?? "sales")} · ${escapeHtml(item.from ?? "unknown")}</p>
   <p class="body">${escapeHtml(item.body ?? "")}</p>
   <p class="why">${escapeHtml(why)}</p>
   <div class="hitl">
-    <button type="button" data-action="approve">Approve send</button>
+    <button type="button" data-action="approve">Approve</button>
     <button type="button" data-action="edit">Edit draft</button>
     <button type="button" data-action="kill">Kill</button>
   </div>
@@ -64,11 +60,11 @@ export function ParkCard({
   busy?: boolean;
 }) {
   const title = item.subject ?? item.body ?? item.id;
-  const amount = inferredAmount(item);
+  const amount = typedAmount(item);
   const risk = amount && amount >= 10_000 ? "high" : "normal";
   const why =
     item.rationale ??
-    "Fixture park. Approve sends through the worker. The model cannot commit_send.";
+    "Fixture park. Approve goes through the worker. The model cannot send.";
   return (
     <article className="park-card" tabIndex={0} data-decision={item.id} data-risk={risk} data-channel={channelOf(item)}>
       <div className="card-title">
@@ -104,7 +100,7 @@ export function ParkCard({
         ) : (
           <>
             <button type="button" disabled={busy} onClick={() => onApprove?.(item.id)}>
-              Approve send
+              Approve
             </button>
             <button type="button" onClick={() => onEdit?.(item.id)}>
               Edit draft
