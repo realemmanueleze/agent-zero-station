@@ -29,6 +29,7 @@ export function renderParkCardHtml(item: ParkItem): string {
   <p class="body">${escapeHtml(item.body ?? "")}</p>
   <p class="why">${escapeHtml(why)}</p>
   ${item.state === "parked" ? `<p class="why">Approve sends this. It cannot be pulled back.</p>` : ""}
+  ${item.traceUrl ? `<p class="trace"><a href="${escapeHtml(item.traceUrl)}">View trace</a></p>` : ""}
   <div class="hitl">
     <button type="button" data-action="approve">Approve</button>
     <button type="button" data-action="edit">Edit draft</button>
@@ -94,6 +95,11 @@ export function ParkCard({
       <p className="why">{why}</p>
       {item.state === "parked" && !sending ? (
         <p className="why">Approve sends this. It cannot be pulled back.</p>
+      ) : null}
+      {item.traceUrl ? (
+        <p className="trace">
+          <a href={item.traceUrl}>View trace</a>
+        </p>
       ) : null}
       <div className="hitl">
         {editing ? (

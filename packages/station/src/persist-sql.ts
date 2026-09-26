@@ -73,7 +73,7 @@ export async function hydrateLedgerFromSql(url: string, ledger: SharedLedger): P
       });
     }
     const decisions = await client.query(
-      "SELECT id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase, record_id FROM decisions",
+      "SELECT id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase, record_id, trace_id, trace_url FROM decisions",
     );
     for (const row of decisions.rows) {
       const id = String(row.id);
@@ -96,6 +96,10 @@ export async function hydrateLedgerFromSql(url: string, ledger: SharedLedger): P
         killed: row.killed === true,
         killPhase: row.kill_phase ? (String(row.kill_phase) as LedgerDecision["killPhase"]) : undefined,
         recordId: row.record_id ? String(row.record_id) : undefined,
+        traceRun:
+          row.trace_id && row.trace_url
+            ? { id: String(row.trace_id), url: String(row.trace_url) }
+            : undefined,
       });
       ledger.sendIds.add(sendId);
     }
@@ -195,8 +199,8 @@ export async function flushLedgerToSql(url: string, ledger: SharedLedger): Promi
     }
     for (const row of ledger.decisions.values()) {
       await client.query(
-        `INSERT INTO decisions (id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase, record_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        `INSERT INTO decisions (id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase, record_id, trace_id, trace_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
          ON CONFLICT (id) DO UPDATE SET
            state = EXCLUDED.state,
            body = EXCLUDED.body,
@@ -210,7 +214,9 @@ export async function flushLedgerToSql(url: string, ledger: SharedLedger): Promi
            producer_ref = EXCLUDED.producer_ref,
            killed = EXCLUDED.killed,
            kill_phase = EXCLUDED.kill_phase,
-           record_id = EXCLUDED.record_id`,
+           record_id = EXCLUDED.record_id,
+           trace_id = EXCLUDED.trace_id,
+           trace_url = EXCLUDED.trace_url`,
         [
           row.id,
           row.signalId ?? null,
@@ -229,6 +235,8 @@ export async function flushLedgerToSql(url: string, ledger: SharedLedger): Promi
           row.killed === true,
           row.killPhase ?? null,
           row.recordId ?? null,
+          row.traceRun?.id ?? null,
+          row.traceRun?.url ?? null,
         ],
       );
     }
