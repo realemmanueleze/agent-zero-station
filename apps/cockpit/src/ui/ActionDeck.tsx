@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { subscribeDesk, type DeskLive } from "./desk-live.ts";
 import { turnLoop } from "./loop.ts";
 import { ParkQueue } from "./ParkQueue.tsx";
-import { ledgerSentence, tickWord, waitingCount } from "./park-action.ts";
+import { ledgerSentence, spendSentence, tickWord, waitingCount } from "./park-action.ts";
 import { StationShell } from "./StationShell.tsx";
 import { channelKinds, mergeLiveConnections } from "./workspace.ts";
 import type { Connection, ParkItem } from "./types.ts";
@@ -23,10 +23,12 @@ export function ActionDeck({
   items,
   live = [],
   workerUp = true,
+  spend,
 }: {
   items: ParkItem[];
   live?: Connection[];
   workerUp?: boolean;
+  spend?: { spent: number; budget: number };
 }) {
   const [desk, setDesk] = useState(() => liveFrom(items));
   useEffect(() => subscribeDesk(setDesk), []);
@@ -47,6 +49,11 @@ export function ActionDeck({
           <a href="/activity">
             <b>{desk.tick}</b> {desk.detail}
           </a>
+          {spend ? (
+            <a href="/activity">
+              <b>{spendSentence(spend.spent, spend.budget)}</b>
+            </a>
+          ) : null}
         </div>
       </section>
       <main className="grid">
