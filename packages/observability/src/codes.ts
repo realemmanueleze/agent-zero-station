@@ -25,6 +25,7 @@ export const errorCodes = {
   "connections.nango_failed": { status: 502, retryable: true },
   "auth.oauth_state": { status: 400, retryable: false },
   "pack.unknown": { status: 400, retryable: false },
+  "transcript.unlabeled": { status: 400, retryable: false },
   "policy.denied": { status: 403, retryable: false },
 } as const;
 
