@@ -5,6 +5,7 @@ import {
   runLiveTurn,
   scoringTurnCallsCommitSend,
 } from "@station/loop";
+import { guardToolCall } from "../../packages/loop/src/drafter.ts";
 
 describe("loop.deep-agents (gate: merge)", () => {
   it("recorded live turn parks; tools omit send; A cannot see B", () => {
@@ -28,5 +29,6 @@ describe("loop.deep-agents (gate: merge)", () => {
     });
     expect(prompt).toContain("alpha-hit");
     expect(prompt).not.toContain("bravo-secret");
+    expect(guardToolCall("commit_send", () => undefined)).toBe("denied");
   });
 });

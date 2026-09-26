@@ -6,8 +6,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@langchain/core": "1.2.12",
     "@langchain/langgraph": "^1.0.0",
     "@station/observability": "workspace:*",
-    "@station/packs": "workspace:*"
+    "@station/packs": "workspace:*",
+    "deepagents": "^1.14.1",
+    "zod": "4.3.6"
   }
 }

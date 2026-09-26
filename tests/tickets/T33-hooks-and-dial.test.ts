@@ -24,7 +24,7 @@ describe("T33 hooks and dial", () => {
     expect(LIVE_TOOL_NAMES).not.toContain("commit_send");
     expect(scoringTurnCallsCommitSend()).toBe(false);
     const loop = readFileSync("packages/loop/package.json", "utf8");
-    expect(loop).not.toMatch(/deepagents/);
+    expect(loop).toMatch(/deepagents/);
   });
 
   it("a turn without a model key matches the scoring turn", () => {

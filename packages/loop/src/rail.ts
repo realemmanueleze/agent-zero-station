@@ -8,6 +8,8 @@ import {
 } from "@langchain/langgraph";
 import { getPack } from "@station/packs";
 import { LedgerCheckpointer, type DaCheckpoint } from "./ledger-checkpointer.ts";
+import { draftWithAgent } from "./drafter.ts";
+import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 
 export type HumanDecision =
   | { action: "approve" }
@@ -121,28 +123,45 @@ export class RailEngine {
     private readonly opts: {
       send: (state: { draft: string; threadId: string }) => void | Promise<void>;
       store?: RailStore;
+      model?: BaseLanguageModel;
+      draft?: (
+        node: "draft_outreach" | "draft_response" | "next_best_actions",
+        state: { thread: string; reply: string; from: string; subject: string },
+      ) => string | Promise<string>;
     },
   ) {
     const store = opts.store ?? { checkpoints: [], opens: new Map() };
     this.opens = store.opens;
     this.checkpointer = new LedgerCheckpointer(store.checkpoints);
     const send = this.opts.send;
+    const draftNode = async (
+      node: "draft_outreach" | "draft_response" | "next_best_actions",
+      state: { thread: string; reply: string; from: string; subject: string },
+      text: string,
+    ): Promise<string> => {
+      if (this.opts.draft) {
+        return this.opts.draft(node, state);
+      }
+      if (this.opts.model) {
+        return draftWithAgent({ node, text, model: this.opts.model });
+      }
+      const pack = getPack("pack-unseen-engine");
+      const signal = { text, subject: state.subject, from: state.from };
+      const body = pack.draft(signal, pack.score(signal));
+      return node === "draft_response" ? `${body}\n${state.reply}` : body;
+    };
     const graph = new StateGraph(RailState)
       .addNode("enrich_lead", (state) => ({
         from: state.from,
         subject: state.subject,
         trace: ["enrich_lead"],
       }))
-      .addNode("draft_outreach", (state) => {
-        const pack = getPack("pack-unseen-engine");
-        const signal = { text: state.thread, subject: state.subject, from: state.from };
-        return {
-          draft: pack.draft(signal, pack.score(signal)),
-          approval: "pending" as const,
-          phase: "review",
-          trace: ["draft_outreach"],
-        };
-      })
+      .addNode("draft_outreach", async (state) => ({
+        draft: await draftNode("draft_outreach", state, state.thread),
+        approval: "pending" as const,
+        phase: "review",
+        trace: ["draft_outreach"],
+      }))
       .addNode("human_review", (state) => {
         const decision = interrupt({ kind: "human_review", draft: state.draft }) as HumanDecision;
         if (decision.action === "edit") {
@@ -198,16 +217,12 @@ export class RailEngine {
       .addNode("process_transcript", () => ({
         trace: ["process_transcript"],
       }))
-      .addNode("next_best_actions", (state) => {
-        const pack = getPack("pack-unseen-engine");
-        const signal = { text: state.reply, subject: "Next step", from: state.from };
-        return {
-          draft: pack.draft(signal, pack.score(signal)),
-          approval: "pending" as const,
-          phase: "review",
-          trace: ["next_best_actions"],
-        };
-      })
+      .addNode("next_best_actions", async (state) => ({
+        draft: await draftNode("next_best_actions", state, state.reply),
+        approval: "pending" as const,
+        phase: "review",
+        trace: ["next_best_actions"],
+      }))
       .addNode("draft_objection", (state) => {
         const pack = getPack("pack-unseen-engine");
         const signal = { text: state.reply, subject: "Objection", from: state.from };
@@ -218,16 +233,12 @@ export class RailEngine {
           trace: ["draft_objection"],
         };
       })
-      .addNode("draft_response", (state) => {
-        const pack = getPack("pack-unseen-engine");
-        const signal = { text: state.reply, subject: "Reply", from: state.from };
-        return {
-          draft: `${pack.draft(signal, pack.score(signal))}\n${state.reply}`,
-          approval: "pending" as const,
-          phase: "review",
-          trace: ["draft_response"],
-        };
-      })
+      .addNode("draft_response", async (state) => ({
+        draft: await draftNode("draft_response", state, state.reply),
+        approval: "pending" as const,
+        phase: "review",
+        trace: ["draft_response"],
+      }))
       .addEdge(START, "enrich_lead")
       .addEdge("enrich_lead", "draft_outreach")
       .addEdge("draft_outreach", "human_review")
