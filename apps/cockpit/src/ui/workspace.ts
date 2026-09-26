@@ -1,5 +1,6 @@
 import { stationConfig } from "../lib/station-config.ts";
 import { defaultConnectors } from "./connectors.ts";
+import { ledgerSentence, needsYou } from "./park-action.ts";
 import type { ActivityEvent, ChannelKind, Connection, ParkItem } from "./types.ts";
 
 export const channelKinds: ChannelKind[] = ["email", "slack", "obsidian", "db", "mcp"];
@@ -70,9 +71,7 @@ export function mergeLiveConnections(
     status: Connection["status"];
   }>,
 ): Connection[] {
-  const hidden = new Set(live.map((row) => `${row.kind}|${row.account}`));
-  const remaining = seedConnections().filter((row) => !hidden.has(`${row.kind}|${row.account}`));
-  const liveRows: Connection[] = live.map((row) => ({
+  return live.map((row) => ({
     id: row.id,
     kind: row.kind,
     label: row.label,
@@ -80,7 +79,6 @@ export function mergeLiveConnections(
     detail: row.status,
     status: row.status,
   }));
-  return [...liveRows, ...remaining];
 }
 
 export function connectionsFor(kind: ChannelKind): Connection[] {
@@ -161,7 +159,7 @@ export function activityFromLedger(items: ParkItem[]): ActivityEvent[] {
     at: "2026-01-01T00:00:00Z",
     channel: inferChannel(item),
     account: inferAccount(item),
-    action: item.state,
+    action: ledgerSentence(item, items),
     signalId: item.id,
     detail: item.subject ?? item.body ?? item.id,
   }));
@@ -193,7 +191,7 @@ export function generateBrief(
   activity: ActivityEvent[],
   query = "",
 ): string {
-  const parked = items.filter((item) => item.state === "parked");
+  const parked = items.filter(needsYou);
   const sent = items.filter((item) => item.state === "sent");
   const byChannel = channelKinds
     .map((kind) => {

@@ -1,4 +1,5 @@
 import type { ActivityEvent, ChannelKind, Connection, ParkItem } from "../ui/types.ts";
+import { sentenceForState } from "../ui/park-action.ts";
 
 const workerUrl = () => process.env.STATION_WORKER_URL ?? "http://127.0.0.1:19174";
 const controlToken = () => process.env.STATION_CONTROL_TOKEN ?? "dev-control-token";
@@ -38,6 +39,25 @@ export async function forwardWorkerRedirect(res: Response): Promise<Response> {
   return new Response(oauthFailureHtml(message), { status: res.status, headers });
 }
 
+function doorErrorRedirect(): Response {
+  return new Response(null, {
+    status: 302,
+    headers: { location: "/channels?connect=error" },
+  });
+}
+
+function pathWithReturn(path: string, req?: Request): string {
+  if (!req) {
+    return path;
+  }
+  const ret = new URL(req.url).searchParams.get("return") ?? "";
+  if (!ret) {
+    return path;
+  }
+  const join = path.includes("?") ? "&" : "?";
+  return `${path}${join}return=${encodeURIComponent(ret)}`;
+}
+
 export async function workerRedirect(path: string): Promise<Response> {
   const res = await fetch(`${workerUrl()}${path}`, {
     redirect: "manual",
@@ -45,6 +65,22 @@ export async function workerRedirect(path: string): Promise<Response> {
     cache: "no-store",
   });
   return forwardWorkerRedirect(res);
+}
+
+export async function oauthWorkerRedirect(path: string, req?: Request): Promise<Response> {
+  try {
+    const res = await fetch(`${workerUrl()}${pathWithReturn(path, req)}`, {
+      redirect: "manual",
+      headers: { authorization: `Bearer ${controlToken()}` },
+      cache: "no-store",
+    });
+    if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+      return forwardWorkerRedirect(res);
+    }
+    return doorErrorRedirect();
+  } catch {
+    return doorErrorRedirect();
+  }
 }
 
 export async function listLiveConnections(): Promise<Connection[]> {
@@ -103,6 +139,7 @@ export function mapWorkerActivity(
     channel?: string;
     at?: string;
     signalId?: string;
+    killPhase?: "unsent" | "inflight" | "sent";
   }>,
 ): ActivityEvent[] {
   return rows.map((row) => ({
@@ -110,7 +147,7 @@ export function mapWorkerActivity(
     at: row.at ?? "",
     channel: (row.channel as ChannelKind) ?? "email",
     account: row.account ?? "",
-    action: row.action ?? "",
+    action: sentenceForState(row.action ?? "", row.killPhase),
     signalId: row.signalId ?? row.id ?? "",
     detail: row.detail ?? "",
   }));

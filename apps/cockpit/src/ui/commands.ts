@@ -27,5 +27,6 @@ export const commandActions: CommandAction[] = [
   { id: "channels", label: "Open channels", hint: "C", group: "nav" },
   { id: "activity", label: "Open activity", hint: "Y", group: "nav" },
   { id: "brief", label: "Open brief", hint: "B", group: "nav" },
+  { id: "workflows", label: "Open workflows", hint: "W", group: "nav" },
   { id: "theme", label: "Toggle theme", hint: "T", group: "theme" },
 ];

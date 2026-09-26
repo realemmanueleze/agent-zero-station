@@ -2,7 +2,7 @@
 
 An open-source command station you clone, connect to your own mail and tools, restyle, and run in one container. The agent drafts. You approve. Same image on a laptop and in the cloud.
 
-This repo is not [frdel/agent-zero](https://github.com/frdel/agent-zero). That is a general agent runtime. This is an opinionated station kit on [LangChain Deep Agents](https://github.com/langchain-ai/deepagents).
+This repo is not [frdel/agent-zero](https://github.com/frdel/agent-zero). That is a general agent runtime. This is an opinionated station kit: the worker drafts, a person approves, and the ledger is the pause-and-resume host. Deep Agents is a later wrap around draft, not a dependency in this tree.
 
 ## Branches
 
@@ -10,6 +10,10 @@ This repo is not [frdel/agent-zero](https://github.com/frdel/agent-zero). That i
 - `main` — production.
 
 ## Design
+
+[docs/SYSTEM-DESIGN.md](docs/SYSTEM-DESIGN.md) — structure, deploy, agents, context, memory, scale, security, and the harness.
+
+[docs/designs/kit-contract.md](docs/designs/kit-contract.md) — approved send, wait, and context contract.
 
 [docs/designs/agent-zero-station-kit.md](docs/designs/agent-zero-station-kit.md)
 

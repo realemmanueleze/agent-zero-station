@@ -714,10 +714,24 @@ kbd {
 }
 
 .quiet-pill[type="submit"],
+.quiet-pill[type="button"],
 a.quiet-pill[href*="oauth"],
 a.quiet-pill[href*="nango"] {
   border-color: color-mix(in srgb, var(--park-border) 45%, var(--line));
   background: color-mix(in srgb, var(--park-fill) 80%, var(--surface));
+}
+
+.mute-action {
+  border: 0;
+  background: transparent;
+  color: var(--mute);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
 }
 
 .mute {
@@ -778,7 +792,8 @@ a.quiet-pill[href*="nango"] {
     grid-template-columns: 1fr;
   }
 
-  .add-source {
+  .kind-layout .add-source {
+    order: -1;
     position: static;
   }
 

@@ -2,6 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { dispatchCommand, registerCommandHandler } from "./commands.ts";
+import { publishDesk } from "./desk-live.ts";
+import { turnLoop } from "./loop.ts";
+import { ledgerSentence, needsYou, replyOnRun, tickWord } from "./park-action.ts";
 import { ParkSlot } from "./ParkSlot.tsx";
 import { ScreenState } from "./ScreenState.tsx";
 import { useParkActions } from "./useParkActions.ts";
@@ -15,26 +18,77 @@ export function ParkQueue({
   items: ParkItem[];
   workerUp?: boolean;
 }) {
-  const { rows, parked, notice, editingId, draft, setDraft, act, beginEdit, setEditingId, busyId } =
-    useParkActions(items);
-  const parkedRef = useRef(parked);
-  parkedRef.current = parked;
+  const {
+    rows,
+    notice,
+    noticeError,
+    editingId,
+    draft,
+    setDraft,
+    act,
+    beginEdit,
+    setEditingId,
+    busyId,
+    trackedId,
+  } = useParkActions(items);
+  const needs = rows.filter(needsYou);
+  const needsRef = useRef(needs);
+  const busyRef = useRef(busyId);
+  const prevIds = useRef<string[]>([]);
+  needsRef.current = needs;
+  busyRef.current = busyId;
 
   useEffect(() => {
-    publishWaiting(parked.length);
-  }, [parked.length]);
+    publishWaiting(needs.length);
+    const latest = rows[0];
+    publishDesk({
+      waiting: needs.length,
+      tick: latest ? tickWord(ledgerSentence(latest, rows)) : "quiet",
+      detail: latest ? (latest.from ?? latest.subject ?? "ledger empty") : "ledger empty",
+      steps: turnLoop(rows, trackedId),
+    });
+  }, [needs.length, rows, trackedId]);
+
+  useEffect(() => {
+    const ids = needs.map((item) => item.id);
+    const prev = prevIds.current;
+    const tracked = trackedId;
+    if (tracked && prev.includes(tracked) && !ids.includes(tracked)) {
+      const index = prev.indexOf(tracked);
+      const nextId = ids[index] ?? ids[index - 1];
+      if (nextId) {
+        document
+          .querySelector<HTMLButtonElement>(`[data-decision="${CSS.escape(nextId)}"] [data-action="approve"]`)
+          ?.focus();
+      } else {
+        document.getElementById("nothing-parked")?.focus();
+      }
+    } else if (busyId) {
+      document
+        .querySelector<HTMLButtonElement>(`[data-decision="${CSS.escape(busyId)}"] [data-action="approve"]`)
+        ?.focus();
+    }
+    prevIds.current = ids;
+  }, [needs, trackedId, busyId]);
 
   useEffect(() => {
     const handle = (id: string): boolean => {
-      const first = parkedRef.current[0];
+      const first = needsRef.current[0];
       if (!first) {
         return false;
       }
+      const sending = first.state === "sending" || busyRef.current === first.id;
       if (id === "approve") {
+        if (busyRef.current === first.id) {
+          return true;
+        }
         void act(first.id, "approve");
         return true;
       }
       if (id === "edit") {
+        if (sending) {
+          return true;
+        }
         beginEdit(first);
         return true;
       }
@@ -71,19 +125,21 @@ export function ParkQueue({
     <section className="work" id="needs-you" data-hotkeys="on">
       <header className="work-head">
         <h2>Needs you</h2>
-        <p className="waiting-count">{parked.length} waiting</p>
+        <p className="waiting-count">{needs.length} waiting</p>
       </header>
       {!workerUp ? (
         <ScreenState status="error" title="Worker is not reachable on :19174">
           Start `pnpm dev`. Cards stay parked.
         </ScreenState>
       ) : null}
-      {parked.length === 0 ? (
-        <ScreenState status="empty" title="Nothing parked">
-          The queue is clear. New inbound stays here until you Approve, Edit, or Kill.
-        </ScreenState>
+      {needs.length === 0 ? (
+        <div id="nothing-parked" tabIndex={-1}>
+          <ScreenState status="empty" title="Nothing parked">
+            The queue is clear. New inbound stays here until you Approve, Edit, or Kill.
+          </ScreenState>
+        </div>
       ) : (
-        parked.map((item) => (
+        needs.map((item) => (
           <ParkSlot
             key={item.id}
             item={item}
@@ -96,6 +152,7 @@ export function ParkQueue({
             onCancelEdit={() => setEditingId(null)}
             onKill={(id) => void act(id, "kill")}
             busy={busyId === item.id}
+            reply={replyOnRun(item, rows)}
           />
         ))
       )}
@@ -105,13 +162,11 @@ export function ParkQueue({
           <li key={row.id}>
             <strong>{row.from ?? row.accountId ?? "fixture"}</strong>
             <span>{row.body ?? row.subject}</span>
-            <em>{row.state}</em>
+            <em>{ledgerSentence(row, rows)}</em>
           </li>
         ))}
       </ul>
-      {notice ? (
-        <ScreenState status={notice.startsWith("park.") || notice.includes("lease") ? "error" : "ready"} title={notice} />
-      ) : null}
+      {notice ? <ScreenState status={noticeError ? "error" : "ready"} title={notice} /> : null}
     </section>
   );
 }

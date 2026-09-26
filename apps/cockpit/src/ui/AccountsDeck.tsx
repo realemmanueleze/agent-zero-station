@@ -21,8 +21,7 @@ export function AccountsDeck({
     <StationShell title="Mailbox rows" waiting={waiting}>
       <main className="work stack">
         <p className="note">
-          Live rows come from the connections vault. Config mailboxes remain as seed labels. Open
-          Channels → email to add a source or park on a mailbox.
+          These rows are the connections vault. Open Channels → email to sign in another mailbox.
         </p>
         {!workerUp ? (
           <ScreenState status="error" title="Worker is not reachable">

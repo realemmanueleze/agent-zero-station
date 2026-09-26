@@ -304,6 +304,12 @@ describe("T28 Nango connect", () => {
       const sessionJson = (await session.json()) as { error?: { code?: string } };
       expect(session.status).toBe(400);
       expect(sessionJson.error?.code).toBe("connections.invalid");
+      const startFail = await fetch(
+        `http://127.0.0.1:${bound.port}/nango/start?kind=email&return=/channels/email`,
+        { redirect: "manual", headers },
+      );
+      expect(startFail.status).toBe(302);
+      expect(startFail.headers.get("location")).toBe("http://127.0.0.1:19173/channels/email?connect=error");
       const denied = await fetch(`http://127.0.0.1:${bound.port}/nango/session`, {
         method: "POST",
         body: "{}",

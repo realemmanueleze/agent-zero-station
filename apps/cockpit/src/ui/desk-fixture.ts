@@ -69,6 +69,13 @@ export async function deskFixtureFetch(
   if (park) {
     const id = decodeURIComponent(park[1] ?? "");
     const action = park[2];
+    const item = fixture.items.find((row) => row.id === id);
+    if (!item) {
+      return jsonRes(404, { error: { code: "park.missing" } });
+    }
+    if (action === "approve" && item.state === "sending") {
+      return jsonRes(409, { error: { code: "send.in_flight" } });
+    }
     if (action === "approve") {
       fixture.approveCalls += 1;
       if (fixture.approveDelayMs > 0) {
@@ -80,10 +87,6 @@ export async function deskFixtureFetch(
     }
     if (action === "approve" && fixture.mode === "approve-fail") {
       return jsonRes(502, { error: { code: "send.provider_failed" } });
-    }
-    const item = fixture.items.find((row) => row.id === id);
-    if (!item) {
-      return jsonRes(404, { error: { code: "park.missing" } });
     }
     if (action === "approve") {
       item.state = "sent";

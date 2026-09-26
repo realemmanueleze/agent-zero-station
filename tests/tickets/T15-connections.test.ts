@@ -147,7 +147,7 @@ describe("T15 connections", () => {
     }
   });
 
-  it("seed hide is per kind+account; adding one live Gmail keeps hello@acme.com", () => {
+  it("the roster is the vault; the example pack is not appended", () => {
     const merged = mergeLiveConnections([
       {
         id: "uuid-1",
@@ -157,10 +157,8 @@ describe("T15 connections", () => {
         status: "live",
       },
     ]);
-    const emails = merged.filter((row) => row.kind === "email").map((row) => row.account);
-    expect(emails).toContain("work@acme.com");
-    expect(emails).toContain("hello@acme.com");
-    expect(emails.filter((account) => account === "work@acme.com")).toHaveLength(1);
+    expect(merged.map((row) => row.account)).toEqual(["work@acme.com"]);
+    expect(mergeLiveConnections([])).toEqual([]);
   });
 
   it("DELETE then Approve is connections.missing and stays parked", async () => {
@@ -292,11 +290,12 @@ describe("T15 connections", () => {
         { redirect: "manual", headers: { authorization: "Bearer t15" } },
       );
       expect(first.status).toBeLessThan(400);
-      const replay = await workerJson(
-        bound.port,
-        `/oauth/google/callback?code=ok-code&state=${state}`,
+      const replay = await fetch(
+        `http://127.0.0.1:${bound.port}/oauth/google/callback?code=ok-code&state=${state}`,
+        { redirect: "manual", headers: { authorization: "Bearer t15" } },
       );
-      expect(replay.json).toMatchObject({ error: { code: "auth.oauth_state" } });
+      expect(replay.status).toBe(302);
+      expect(replay.headers.get("location")).toBe("http://127.0.0.1:19173/channels?connect=error");
       const logs = (await workerJson(bound.port, "/park")).json;
       const dumped = `${JSON.stringify(logs)}\n${location}`;
       expect(dumped).not.toContain("ok-code");
@@ -394,8 +393,12 @@ describe("T15 connections", () => {
         { redirect: "manual", headers: { authorization: "Bearer t15" } },
       );
       expect(first.status).toBeLessThan(400);
-      const replay = await workerJson(bound.port, `/oauth/slack/callback?code=ok-code&state=${state}`);
-      expect(replay.json).toMatchObject({ error: { code: "auth.oauth_state" } });
+      const replay = await fetch(
+        `http://127.0.0.1:${bound.port}/oauth/slack/callback?code=ok-code&state=${state}`,
+        { redirect: "manual", headers: { authorization: "Bearer t15" } },
+      );
+      expect(replay.status).toBe(302);
+      expect(replay.headers.get("location")).toBe("http://127.0.0.1:19173/channels?connect=error");
     } finally {
       await bound.close();
     }

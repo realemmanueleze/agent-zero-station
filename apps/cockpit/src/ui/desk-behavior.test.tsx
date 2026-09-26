@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createDeskFixture, deskFixtureFetch } from "./desk-fixture.ts";
 import { deskViewport } from "./desk-viewport.ts";
-import { AddSourcePanel } from "./AddSourcePanel.tsx";
 import { PacksDeck } from "./PacksDeck.tsx";
 import { ParkQueue } from "./ParkQueue.tsx";
+import { ActionDeck } from "./ActionDeck.tsx";
+import { ConnectFlow } from "./ConnectFlow.tsx";
 import { ConnectionView } from "./ConnectionView.tsx";
 import { StationShell } from "./StationShell.tsx";
 import { applyTheme, cycleTheme, readStoredTheme, themeLabel, THEMES, type ThemeName } from "./theme.ts";
@@ -14,6 +15,7 @@ import type { ParkItem } from "./types.ts";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
 }));
 
 const parked: ParkItem = {
@@ -73,9 +75,10 @@ describe("T31 desk behavior", () => {
     const ok = createDeskFixture();
     mockFetch(ok, 40);
     const first = render(<ParkQueue items={[{ ...parked }]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-    await waitFor(() => expect(screen.getByText(/Sent/)).toBeTruthy());
+    const approve = screen.getByRole("button", { name: "Approve" });
+    fireEvent.click(approve);
+    fireEvent.click(approve);
+    await waitFor(() => expect(screen.getAllByText("Sent. Watching for a reply.").length).toBeGreaterThan(0));
     expect(ok.approveCalls).toBe(1);
     expect(ok.items[0]?.state).toBe("sent");
     first.unmount();
@@ -84,7 +87,7 @@ describe("T31 desk behavior", () => {
     mockFetch(fail);
     render(<ParkQueue items={[{ ...parked }]} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-    await waitFor(() => expect(screen.getByText("send.provider_failed")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("The provider refused the send. The slip stays parked.")).toBeTruthy());
     expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
   });
 
@@ -93,7 +96,7 @@ describe("T31 desk behavior", () => {
     mockFetch(fixture);
     render(<ParkQueue items={[{ ...parked }]} />);
     fireEvent.click(screen.getByRole("button", { name: "Kill" }));
-    await waitFor(() => expect(screen.getByText(/Marked dropped/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("Killed. Nothing was sent.").length).toBeGreaterThan(0));
     expect(fixture.items[0]?.state).toBe("dropped");
   });
 
@@ -109,7 +112,7 @@ describe("T31 desk behavior", () => {
     mockFetch(killFix);
     render(<ParkQueue items={[{ ...parked }]} />);
     fireEvent.keyDown(window, { key: "k" });
-    await waitFor(() => expect(screen.getByText(/Marked dropped/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("Killed. Nothing was sent.").length).toBeGreaterThan(0));
   });
 
   it("keyboard A approves once through the mock", async () => {
@@ -118,7 +121,7 @@ describe("T31 desk behavior", () => {
     render(<ParkQueue items={[{ ...parked }]} />);
     fireEvent.keyDown(window, { key: "a" });
     fireEvent.keyDown(window, { key: "a" });
-    await waitFor(() => expect(screen.getByText(/Sent/)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("Sent. Watching for a reply.").length).toBeGreaterThan(0));
     expect(fixture.approveCalls).toBe(1);
   });
 
@@ -226,7 +229,8 @@ describe("T31 desk behavior", () => {
         return new Response("{}", { status: 500 });
       }),
     );
-    render(<AddSourcePanel kind="email" />);
+    render(<ConnectFlow kind="email" />);
+    fireEvent.click(screen.getByRole("button", { name: /Use IMAP\/SMTP instead/i }));
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(screen.getByText("could not save mailbox")).toBeTruthy());
     expect(screen.getByRole("button", { name: "Add" })).toBeTruthy();
@@ -278,7 +282,75 @@ describe("T31 desk behavior", () => {
         ]}
       />,
     );
-    expect(document.querySelector(".loop")?.textContent).toMatch(/parked · Draft quote/);
+    expect(document.querySelector(".loop")?.textContent).toMatch(/Parked\. · Draft quote/);
     expect(document.querySelector(".loop")?.textContent).not.toMatch(/No ledger rows yet/);
+  });
+
+  it("keeps a sending slip in Needs you and names the ledger", async () => {
+    const fixture = createDeskFixture({
+      items: [{ ...parked, state: "sending" }],
+    });
+    mockFetch(fixture);
+    render(<ParkQueue items={fixture.items} />);
+    expect(screen.getByText("1 waiting")).toBeTruthy();
+    expect(screen.getByText("Sending.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve, Sending." }).getAttribute("aria-disabled")).toBe("true");
+    expect((screen.getByRole("button", { name: "Edit draft" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(window, { key: "a" });
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Send in progress/));
+    expect(fixture.approveCalls).toBe(0);
+    expect(screen.getByRole("button", { name: "Kill" })).toBeTruthy();
+  });
+
+  it("moves focus to the next Approve when a slip leaves, and to the empty state when it was last", async () => {
+    const next = { ...parked, id: "park-2", subject: "Second slip" };
+    const fixture = createDeskFixture({ items: [{ ...parked }, next] });
+    mockFetch(fixture);
+    const view = render(<ParkQueue items={fixture.items} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Kill" })[0]!);
+    await waitFor(() => expect(document.activeElement?.closest("[data-decision]")?.getAttribute("data-decision")).toBe("park-2"));
+    expect(document.activeElement?.getAttribute("role")).not.toBe("alert");
+    view.unmount();
+
+    const last = createDeskFixture();
+    mockFetch(last);
+    render(<ParkQueue items={last.items} />);
+    fireEvent.click(screen.getByRole("button", { name: "Kill" }));
+    await waitFor(() => expect(document.activeElement?.id).toBe("nothing-parked"));
+    expect(screen.getByText("Nothing parked")).toBeTruthy();
+  });
+
+  it("warns before Approve, marks a reply, and ticks one word", async () => {
+    render(<ParkQueue items={[{ ...parked }]} />);
+    expect(screen.getByText("Approve sends this. It cannot be pulled back.")).toBeTruthy();
+    cleanup();
+
+    render(
+      <ActionDeck
+        items={[
+          { ...parked, id: "sent-1", state: "sent", runId: "run-1", subject: "Sent slip" },
+          { ...parked, id: "reply-1", state: "parked", runId: "run-1", subject: "Reply slip" },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/Reply on this run/)).toBeTruthy();
+    expect(screen.getByText("Sent. Reply is parked.")).toBeTruthy();
+    expect(screen.getByText("Parked.")).toBeTruthy();
+    expect(document.querySelector('.desk-ticks a[href="/activity"] b')?.textContent).toBe("Sent");
+    expect(screen.getByText("waiting for Approve")).toBeTruthy();
+    expect(screen.getByText("nothing sends until you do")).toBeTruthy();
+    expect(document.querySelector(".desk-hero strong")?.textContent).toBe("1");
+  });
+
+  it("moves This turn onto the ledger sentence after Approve", async () => {
+    const fixture = createDeskFixture();
+    mockFetch(fixture);
+    render(<ActionDeck items={fixture.items} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() =>
+      expect(document.querySelector(".loop .current")?.textContent).toBe("Sent. Watching for a reply."),
+    );
+    expect(screen.queryByText("nothing sends until you do")).toBeNull();
+    expect(document.querySelector('.desk-ticks a[href="/activity"] b')?.textContent).toBe("Sent");
   });
 });

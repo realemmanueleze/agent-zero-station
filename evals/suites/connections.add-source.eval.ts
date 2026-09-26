@@ -21,14 +21,17 @@ describe("connections.add-source (gate: merge)", () => {
       const parked = json.items.filter((item) => item.state === "parked");
       expect(parked.length).toBeGreaterThan(0);
       const live = mergeLiveConnections([]);
+      expect(live).toEqual([]);
       const html = `${renderEmailChannelHtml()}\n${renderAddSourceHtml("email")}`;
-      expect(html).toMatch(/Sign in with Google|Add source/i);
+      expect(html).toMatch(/Add email/);
+      expect(html).toMatch(/Sign in with Google/);
+      expect(html).toMatch(/return=%2Fchannels%2Femail/);
+      expect(html).not.toMatch(/imap-host|imap-user|imap-password/);
       expect(html).toMatch(/work@acme.com|hello@acme.com/);
       expect(html).not.toContain(token);
       expect(html).not.toContain("STATION_MASTER_KEY");
       expect(html).not.toContain("refreshToken");
       expect(scoringTurnCallsCommitSend()).toBe(false);
-      expect(live.some((row) => row.kind === "email")).toBe(true);
     } finally {
       await runtime.close();
     }

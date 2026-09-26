@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { forwardWorkerRedirect, oauthFailureHtml } from "./worker.ts";
+import { forwardWorkerRedirect, oauthFailureHtml, oauthWorkerRedirect } from "./worker.ts";
 
 describe("workerRedirect error forwarding", () => {
   it("forwards a worker 400 body so the browser is not empty", async () => {
@@ -42,5 +42,33 @@ describe("workerRedirect error forwarding", () => {
     const text = await noMessage.text();
     expect(text).toMatch(/connections\.invalid/);
     expect(text).not.toMatch(/Bearer |STATION_CONTROL_TOKEN/);
+  });
+
+  it("oauthWorkerRedirect 302s to Channels when the worker is down or returns 4xx", async () => {
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new TypeError("Failed to fetch");
+    }) as typeof fetch;
+    try {
+      const out = await oauthWorkerRedirect("/oauth/google/start");
+      expect(out.status).toBe(302);
+      expect(out.headers.get("location")).toBe("/channels?connect=error");
+    } finally {
+      globalThis.fetch = orig;
+    }
+
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: { message: "GOOGLE_OAUTH_CLIENT_ID is required" } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+    try {
+      const out = await oauthWorkerRedirect("/oauth/google/start");
+      expect(out.status).toBe(302);
+      expect(out.headers.get("location")).toBe("/channels?connect=error");
+      expect(await out.text()).toBe("");
+    } finally {
+      globalThis.fetch = orig;
+    }
   });
 });

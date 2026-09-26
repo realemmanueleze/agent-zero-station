@@ -87,12 +87,17 @@ describe("cockpit Nango and pack proxies", () => {
     });
   });
 
-  it("GET /nango/start forwards a 302 connect link", async () => {
-    await withWorkerFetch(async () => {
-      const res = await nangoStart(new Request("http://cockpit/nango/start?kind=email"));
+  it("GET /nango/start forwards a 302 connect link and return query", async () => {
+    await withWorkerFetch(async (calls) => {
+      const res = await nangoStart(
+        new Request("http://cockpit/nango/start?kind=email&return=/channels/email"),
+      );
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe("https://connect.nango.dev/link");
       expect(await res.text()).toBe("");
+      expect(calls.some((row) => row.url.includes("/nango/start?kind=email&return=%2Fchannels%2Femail"))).toBe(
+        true,
+      );
     });
   });
 

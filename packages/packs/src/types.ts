@@ -1,4 +1,4 @@
-export type PackId = "sales" | "inbox-triage";
+export type PackId = "sales" | "inbox-triage" | "pack-unseen-engine";
 
 export type PackSignal = {
   fixtureId?: string;

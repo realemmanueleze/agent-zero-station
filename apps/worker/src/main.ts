@@ -24,7 +24,7 @@ function loadDotEnv(path: string): void {
     ) {
       value = value.slice(1, -1);
     }
-    if (process.env[key] === undefined) {
+    if (process.env[key] === undefined && value !== "") {
       process.env[key] = value;
     }
   }
@@ -36,7 +36,7 @@ const log = createLogger({ service: "worker" }).withContext({ requestId: "boot" 
 
 const runtime = await startWorker({
   controlToken: process.env.STATION_CONTROL_TOKEN ?? "dev-control-token",
-  fixturePath: "fixtures/demo.jsonl",
+  fixturePath: process.env.STATION_FIXTURE ?? "",
   workerPort: Number(process.env.STATION_WORKER_PORT ?? 19174),
 });
 

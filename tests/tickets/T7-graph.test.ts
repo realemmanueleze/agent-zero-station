@@ -25,6 +25,7 @@ describe("T7 Microsoft Graph", () => {
   it("Graph commitSend uses the same sendId / sending machine as Gmail", async () => {
     const receipt = await station.graph.commitSend({ sendId: "send-graph-1" });
     expect(receipt.sendId).toBe("send-graph-1");
+    expect(await station.send.providerCallCount("send-graph-1")).toBe(0);
   });
 
   it("Graph auth failure is send.provider_failed or auth.graph; 429/5xx are retryable", async () => {

@@ -100,7 +100,7 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     const ok = await open();
     try {
       await doubleClickApprove(ok.page);
-      await see(ok.page.getByText(/Sent/));
+      await see(ok.page.getByText("Sent. Watching for a reply.").first());
       expect(worker.fixture.approveCalls).toBe(1);
       expect(worker.fixture.items[0]?.state).toBe("sent");
     } finally {
@@ -112,7 +112,7 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     const fail = await open();
     try {
       await fail.page.getByRole("button", { name: "Approve" }).click();
-      await see(fail.page.getByText("send.provider_failed"));
+      await see(fail.page.getByText("The provider refused the send. The slip stays parked."));
       await see(fail.page.getByRole("button", { name: "Approve" }));
       expect(worker.fixture.items[0]?.state).toBe("parked");
     } finally {
@@ -124,7 +124,7 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     const killed = await open();
     try {
       await killed.page.getByRole("button", { name: "Kill" }).click();
-      await see(killed.page.getByText(/Marked dropped/));
+      await see(killed.page.getByText("Killed. Nothing was sent.").first());
       expect(worker.fixture.items[0]?.state).toBe("dropped");
     } finally {
       await killed.context.close();
@@ -140,7 +140,7 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
       await keys.page.getByRole("button", { name: "Cancel" }).click();
       await keys.page.locator(".park-card h3").click();
       await keys.page.keyboard.press("k");
-      await see(keys.page.getByText(/Marked dropped/));
+      await see(keys.page.getByText("Killed. Nothing was sent.").first());
     } finally {
       await keys.context.close();
     }
@@ -151,7 +151,7 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
       await approveKey.page.locator(".park-card h3").click();
       await approveKey.page.keyboard.press("a");
       await approveKey.page.keyboard.press("a");
-      await see(approveKey.page.getByText(/Sent/));
+      await see(approveKey.page.getByText("Sent. Watching for a reply.").first());
       expect(worker.fixture.approveCalls).toBe(1);
     } finally {
       await approveKey.context.close();
@@ -256,12 +256,28 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     }
   });
 
-  it("Add source uses Nango start when the mock worker enables it", async () => {
+  it("Add source picker and Add email Google-first rail", async () => {
+    const index = await open("/channels");
+    try {
+      await see(index.page.locator(".add-source").getByRole("heading", { name: "Add source" }));
+      await index.page.locator(".add-source").getByRole("button", { name: /^email/i }).click();
+      await see(index.page.getByRole("heading", { name: "Add email" }));
+      expect(await index.page.getByLabel("IMAP host").count()).toBe(0);
+      await index.page.getByRole("button", { name: "Back to kinds" }).click();
+      await see(index.page.locator(".add-source").getByRole("heading", { name: "Add source" }));
+    } finally {
+      await index.context.close();
+    }
+
     const off = await open("/channels/email");
     try {
+      await see(off.page.getByRole("heading", { name: "Add email" }));
       const google = off.page.getByRole("link", { name: /Sign in with Google/i });
       await see(google);
-      expect(await google.getAttribute("href")).toBe("/oauth/google/start");
+      expect(await google.getAttribute("href")).toBe("/oauth/google/start?return=%2Fchannels%2Femail");
+      expect(await off.page.getByLabel("IMAP host").count()).toBe(0);
+      await off.page.getByRole("button", { name: /Use IMAP\/SMTP instead/i }).click();
+      await see(off.page.getByLabel("IMAP host"));
     } finally {
       await off.context.close();
     }
@@ -269,20 +285,25 @@ describe("T31 Next cockpit with mock worker", { timeout: 60_000 }, () => {
     worker.fixture.nangoEnabled = true;
     const on = await open("/channels/email");
     try {
-      const google = on.page.getByRole("link", { name: /Sign in with Google/i });
-      await see(google);
-      await expect.poll(async () => google.getAttribute("href")).toBe("/nango/start?kind=email");
+      await expect.poll(async () => on.page.getByRole("button", { name: /Sign in with Google/i }).count()).toBe(1);
+      expect(await on.page.getByRole("link", { name: /Sign in with Google/i }).count()).toBe(0);
     } finally {
       await on.context.close();
     }
 
     const slack = await open("/channels/slack");
     try {
-      const link = slack.page.getByRole("link", { name: /Sign in with Slack/i });
-      await see(link);
-      await expect.poll(async () => link.getAttribute("href")).toBe("/nango/start?kind=slack");
+      await expect.poll(async () => slack.page.getByRole("button", { name: /Sign in with Slack/i }).count()).toBe(1);
     } finally {
       await slack.context.close();
+    }
+
+    const mobile = await open("/channels/email", widths.mobile);
+    try {
+      const order = await mobile.page.locator(".kind-layout .add-source").evaluate((el) => getComputedStyle(el).order);
+      expect(order).toBe("-1");
+    } finally {
+      await mobile.context.close();
     }
   });
 

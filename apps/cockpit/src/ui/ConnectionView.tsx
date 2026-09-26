@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { CONNECT_IDS_KEY } from "./ConnectFlow.tsx";
+import { ledgerSentence, sentenceForState, waitingCount } from "./park-action.ts";
 import { ParkQueue } from "./ParkQueue.tsx";
 import { ScreenState } from "./ScreenState.tsx";
 import { StationShell } from "./StationShell.tsx";
@@ -31,7 +34,10 @@ export function ConnectionView({
     return scoped.some((item) => item.id === row.signalId || row.id === `decision-${item.id}`);
   });
   const activity = fromEvents.length > 0 ? fromEvents : scopedLedger;
-  const waiting = scoped.filter((item) => item.state === "parked").length;
+  const waiting = waitingCount(scoped);
+  useEffect(() => {
+    sessionStorage.removeItem(CONNECT_IDS_KEY);
+  }, []);
   return (
     <StationShell title={connection.label} waiting={waiting}>
       <main className="grid">
@@ -47,7 +53,7 @@ export function ConnectionView({
                 <li key={item.id}>
                   <strong>{item.from ?? item.id}</strong>
                   <span>{item.body ?? item.subject}</span>
-                  <em>{item.state}</em>
+                  <em>{ledgerSentence(item, items)}</em>
                 </li>
               ))}
             </ul>
@@ -67,7 +73,7 @@ export function ConnectionView({
               <ul className="inbox">
                 {activity.map((row) => (
                   <li key={row.id}>
-                    <strong>{row.action}</strong>
+                    <strong>{sentenceForState(row.action)}</strong>
                     <span>{row.detail}</span>
                     <em>{row.at.slice(11, 16)}</em>
                   </li>
@@ -86,7 +92,7 @@ export function ConnectionView({
             <ol>
               {activity.map((row) => (
                 <li key={row.id}>
-                  {row.action} · {row.detail}
+                  {sentenceForState(row.action)} · {row.detail}
                 </li>
               ))}
             </ol>

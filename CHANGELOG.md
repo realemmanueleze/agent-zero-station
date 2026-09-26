@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0.0] - 2026-09-26
+
+### Added
+
+- Approve sends once through the ledger outbox, then watches the thread. A reply parks the next draft on the same run. Kill leaves a sent message sent.
+- Sign in with Google can store more than one Gmail account. The token exchange sends the PKCE verifier. Live channel lists show the vault, not the example pack.
+- A workflow desk can scan recent mail, draft a parked reply, and call a webhook. Connecting still never sends.
+- The rail train is specified as T41–T54. Each ticket is its own pull request. Huffman, Carmen, Drive, a second client space, and an evals-admin screen stay held.
+
+### Changed
+
+- Postgres for local Compose is published on `127.0.0.1:5435`.
+- Unknown pack ids return `pack.unknown` (400). `pack-unseen-engine` loads. The dial can park, hold, or deny, and it cannot send.
+
 ## [0.2.0.0] - 2026-09-16
 
 ### Added

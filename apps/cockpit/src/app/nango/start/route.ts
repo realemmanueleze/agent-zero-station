@@ -1,6 +1,6 @@
-import { workerRedirect } from "../../../lib/worker.ts";
+import { oauthWorkerRedirect } from "../../../lib/worker.ts";
 
 export async function GET(req: Request) {
   const kind = new URL(req.url).searchParams.get("kind") ?? "email";
-  return workerRedirect(`/nango/start?kind=${encodeURIComponent(kind)}`);
+  return oauthWorkerRedirect(`/nango/start?kind=${encodeURIComponent(kind)}`, req);
 }

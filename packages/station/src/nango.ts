@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { StationError } from "@station/observability";
 import type { ConnectionKind, ConnectionPublic, ConnectionStore } from "./connections.ts";
+import { allowedOrigin } from "./oauth-google.ts";
+import { connectErrorLocation, oauthReturnPath } from "./oauth-return.ts";
 
 export type NangoFetch = (
   url: string,
@@ -328,13 +330,18 @@ export async function handleNangoRequest(opts: {
     return true;
   }
   if (opts.path.startsWith("/nango/start") && opts.method === "GET") {
-    const kind = sessionKind(opts.url.searchParams.get("kind") ?? "email");
-    const started = await createNangoSession({
-      kind,
-      env: opts.env,
-      fetchImpl: opts.fetchImpl,
-    });
-    opts.redirect(302, started.connectLink);
+    const door = oauthReturnPath(opts.url.searchParams.get("return"), "/channels");
+    try {
+      const kind = sessionKind(opts.url.searchParams.get("kind") ?? "email");
+      const started = await createNangoSession({
+        kind,
+        env: opts.env,
+        fetchImpl: opts.fetchImpl,
+      });
+      opts.redirect(302, started.connectLink);
+    } catch {
+      opts.redirect(302, connectErrorLocation(allowedOrigin(opts.env), door));
+    }
     return true;
   }
   if (opts.path === "/nango/complete" && opts.method === "POST") {

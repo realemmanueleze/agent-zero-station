@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ScreenState } from "./ScreenState.tsx";
 import { StationShell } from "./StationShell.tsx";
+import { ledgerSentence, sentenceForState, waitingCount } from "./park-action.ts";
 import { activityFromLedger, generateBrief, queryWorkspace } from "./workspace.ts";
 import type { ActivityEvent, ParkItem } from "./types.ts";
 
@@ -22,7 +23,7 @@ export function BriefView({
   const matches = queryWorkspace(query, items, activity);
   const brief =
     !query && initialBrief ? initialBrief : generateBrief(items, activity, query);
-  const waiting = items.filter((item) => item.state === "parked").length;
+  const waiting = waitingCount(items);
   return (
     <StationShell title="Ask the workspace" waiting={waiting}>
       <main className="work stack brief-layout">
@@ -58,13 +59,13 @@ export function BriefView({
               <li key={item.id}>
                 <strong>{item.subject ?? item.id}</strong>
                 <span>{item.body}</span>
-                <em>{item.state}</em>
+                <em>{ledgerSentence(item, items)}</em>
               </li>
             ))}
             {matches.activity.map((row) => (
               <li key={row.id}>
                 <strong>
-                  {row.channel} · {row.action}
+                  {row.channel} · {sentenceForState(row.action)}
                 </strong>
                 <span>{row.detail}</span>
                 <em>{row.account}</em>

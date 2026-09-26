@@ -1,5 +1,5 @@
 # T33 evals
 
-- `gate: merge` — existing `evals/suites/loop.deep-agents.eval.ts` plus wrap deny list.
-- Happy trace: inbound parks, no send.
-- Must not send: wrapToolCall plus table both omit `commit_send`.
+- `gate: merge` — `evals/suites/loop.deep-agents.eval.ts` once the wrap is allowed. Before that, the merge gate is the red suite above: unknown pack, dial, and must-not-send.
+- Happy trace: inbound parks. Nothing is sent.
+- Must not send: the tool table and any wrap both omit `commit_send`.

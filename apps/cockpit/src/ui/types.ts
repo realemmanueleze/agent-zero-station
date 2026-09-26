@@ -12,6 +12,8 @@ export type ParkItem = {
   rationale?: string;
   channel?: ChannelKind;
   accountId?: string;
+  runId?: string | null;
+  killPhase?: "unsent" | "inflight" | "sent";
 };
 
 export type Connector = {

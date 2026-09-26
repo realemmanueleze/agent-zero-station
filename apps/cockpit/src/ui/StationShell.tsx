@@ -13,6 +13,7 @@ const links = [
   { href: "/channels", label: "Channels" },
   { href: "/activity", label: "Activity" },
   { href: "/brief", label: "Brief" },
+  { href: "/workflows", label: "Workflows" },
   { href: "/packs", label: "Packs" },
 ];
 
@@ -33,6 +34,9 @@ function runNav(id: string): void {
       return;
     case "brief":
       window.location.assign("/brief");
+      return;
+    case "workflows":
+      window.location.assign("/workflows");
       return;
     case "pack":
       window.location.assign("/packs");

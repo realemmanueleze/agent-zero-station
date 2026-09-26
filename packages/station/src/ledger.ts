@@ -1,4 +1,5 @@
 import type { ConnectionRow } from "./connections.ts";
+import type { KitOutbox, KitRecord, KitWait } from "./kit-ledger.ts";
 
 export type LedgerDecision = {
   id: string;
@@ -15,6 +16,12 @@ export type LedgerDecision = {
   account?: string;
   kind?: "email" | "slack" | "obsidian" | "db" | "mcp";
   sendTo?: string;
+  runId?: string;
+  mailboxId?: string;
+  threadId?: string;
+  producerRef?: string;
+  killed?: boolean;
+  killPhase?: "unsent" | "inflight" | "sent";
 };
 
 export type LedgerSignal = {
@@ -36,6 +43,9 @@ export type SharedLedger = {
   claims: Map<string, string>;
   leases: Map<string, LedgerLease>;
   sendIds: Set<string>;
+  outbox: Map<string, KitOutbox>;
+  waits: KitWait[];
+  records: KitRecord[];
 };
 
 const ledgers = new Map<string, SharedLedger>();
@@ -69,6 +79,9 @@ export function getSharedLedger(url: string | undefined): SharedLedger | undefin
     claims: new Map(),
     leases: new Map(),
     sendIds: new Set(),
+    outbox: new Map(),
+    waits: [],
+    records: [],
   };
   ledgers.set(key, created);
   return created;

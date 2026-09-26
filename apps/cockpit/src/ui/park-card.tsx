@@ -28,6 +28,7 @@ export function renderParkCardHtml(item: ParkItem): string {
   <p class="meta">${escapeHtml(channelOf(item))} · ${escapeHtml(item.packId ?? "sales")} · ${escapeHtml(item.from ?? "unknown")}</p>
   <p class="body">${escapeHtml(item.body ?? "")}</p>
   <p class="why">${escapeHtml(why)}</p>
+  ${item.state === "parked" ? `<p class="why">Approve sends this. It cannot be pulled back.</p>` : ""}
   <div class="hitl">
     <button type="button" data-action="approve">Approve</button>
     <button type="button" data-action="edit">Edit draft</button>
@@ -47,6 +48,7 @@ export function ParkCard({
   onCancelEdit,
   onKill,
   busy,
+  reply,
 }: {
   item: ParkItem;
   editing?: boolean;
@@ -58,6 +60,7 @@ export function ParkCard({
   onCancelEdit?: () => void;
   onKill?: (id: string) => void;
   busy?: boolean;
+  reply?: boolean;
 }) {
   const title = item.subject ?? item.body ?? item.id;
   const amount = typedAmount(item);
@@ -65,6 +68,7 @@ export function ParkCard({
   const why =
     item.rationale ??
     "Fixture park. Approve goes through the worker. The model cannot send.";
+  const sending = item.state === "sending" || busy === true;
   return (
     <article className="park-card" tabIndex={0} data-decision={item.id} data-risk={risk} data-channel={channelOf(item)}>
       <div className="card-title">
@@ -74,6 +78,7 @@ export function ParkCard({
       <p className="meta">
         {channelOf(item)} · {item.packId ?? "sales"} · {item.from ?? "unknown"}
         {item.tenantId ? ` · ${item.tenantId}` : ""}
+        {reply ? " · Reply on this run." : ""}
       </p>
       {editing ? (
         <textarea
@@ -87,6 +92,9 @@ export function ParkCard({
         <p className="body">{item.body}</p>
       )}
       <p className="why">{why}</p>
+      {item.state === "parked" && !sending ? (
+        <p className="why">Approve sends this. It cannot be pulled back.</p>
+      ) : null}
       <div className="hitl">
         {editing ? (
           <>
@@ -99,13 +107,24 @@ export function ParkCard({
           </>
         ) : (
           <>
-            <button type="button" disabled={busy} onClick={() => onApprove?.(item.id)}>
+            <button
+              type="button"
+              data-action="approve"
+              aria-disabled={sending || undefined}
+              aria-label={sending ? "Approve, Sending." : "Approve"}
+              onClick={() => {
+                if (sending) {
+                  return;
+                }
+                onApprove?.(item.id);
+              }}
+            >
               Approve
             </button>
-            <button type="button" onClick={() => onEdit?.(item.id)}>
+            <button type="button" data-action="edit" disabled={sending} onClick={() => onEdit?.(item.id)}>
               Edit draft
             </button>
-            <button type="button" className="danger" onClick={() => onKill?.(item.id)}>
+            <button type="button" className="danger" data-action="kill" onClick={() => onKill?.(item.id)}>
               Kill
             </button>
           </>

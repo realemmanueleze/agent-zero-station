@@ -1,11 +1,23 @@
 "use client";
 
-import { defaultLoop } from "./loop.ts";
+import { useEffect, useState } from "react";
+import { subscribeDesk, type DeskLive } from "./desk-live.ts";
+import { turnLoop } from "./loop.ts";
 import { ParkQueue } from "./ParkQueue.tsx";
-import { ScreenState } from "./ScreenState.tsx";
+import { ledgerSentence, tickWord, waitingCount } from "./park-action.ts";
 import { StationShell } from "./StationShell.tsx";
 import { channelKinds, mergeLiveConnections } from "./workspace.ts";
 import type { Connection, ParkItem } from "./types.ts";
+
+function liveFrom(items: ParkItem[]): DeskLive {
+  const latest = items[0];
+  return {
+    waiting: waitingCount(items),
+    tick: latest ? tickWord(ledgerSentence(latest, items)) : "quiet",
+    detail: latest ? (latest.from ?? latest.subject ?? "ledger empty") : "ledger empty",
+    steps: turnLoop(items, null),
+  };
+}
 
 export function ActionDeck({
   items,
@@ -16,12 +28,13 @@ export function ActionDeck({
   live?: Connection[];
   workerUp?: boolean;
 }) {
-  const waiting = items.filter((item) => item.state === "parked").length;
+  const [desk, setDesk] = useState(() => liveFrom(items));
+  useEffect(() => subscribeDesk(setDesk), []);
   const sources = mergeLiveConnections(live);
   const sourceCount = sources.length;
-  const latest = items[0];
+  const waiting = desk.waiting;
   return (
-    <StationShell title="Everything that needs a human" waiting={waiting}>
+    <StationShell title="Everything that needs a human" waiting={waitingCount(items)}>
       <section className="desk-strip" aria-label="desk status">
         <a className="desk-hero" href="#needs-you">
           <strong>{waiting}</strong>
@@ -32,15 +45,10 @@ export function ActionDeck({
             <b>{sourceCount}</b> {sourceCount === 1 ? "source" : "sources"}
           </a>
           <a href="/activity">
-            <b>{latest?.state ?? "quiet"}</b> {latest?.from ?? latest?.subject ?? "ledger empty"}
+            <b>{desk.tick}</b> {desk.detail}
           </a>
         </div>
       </section>
-      {!workerUp ? (
-        <ScreenState status="error" title="Worker is not reachable on :19174">
-          Start `pnpm dev`. Approve stays local until the worker is up.
-        </ScreenState>
-      ) : null}
       <main className="grid">
         <aside className="rail">
           <h2>Sources</h2>
@@ -66,7 +74,7 @@ export function ActionDeck({
         <aside className="rail loop">
           <h2>This turn</h2>
           <ol>
-            {defaultLoop.map((step) => (
+            {desk.steps.map((step) => (
               <li key={step.id} className={step.current ? "current" : undefined}>
                 {step.label}
               </li>

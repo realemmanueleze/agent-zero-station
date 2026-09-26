@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { listPackIds, type PackId } from "@station/packs";
+import { listPackIds, type PackId } from "@station/packs/catalog";
 import { ScreenState } from "./ScreenState.tsx";
 import { StationShell } from "./StationShell.tsx";
 

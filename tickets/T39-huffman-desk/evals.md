@@ -1,5 +1,5 @@
 # T39 evals
 
-- `gate: nightly` — `evals/suites/huffman.phone.eval.ts` payload fixtures (desk tests stay on Next).
+- `gate: nightly` — `evals/suites/huffman.phone.eval.ts` on payload fixtures. Desk tests stay on the real Next cockpit.
 - Happy trace: phone Approve of a parked quote.
-- Must not send: window expired does not send.
+- Must not send: an expired window does not send.

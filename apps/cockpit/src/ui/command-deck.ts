@@ -1,4 +1,5 @@
 import { renderParkCardHtml } from "./park-card.tsx";
+import { needsYou } from "./park-action.ts";
 import {
   activityFromLedger,
   channelKinds,
@@ -11,7 +12,7 @@ import {
 import type { ChannelKind, ParkItem } from "./types.ts";
 
 export function renderActionHomeHtml(items: ParkItem[]): string {
-  const parked = items.filter((item) => item.state === "parked");
+  const parked = items.filter(needsYou);
   const cards = parked.map((item) => renderParkCardHtml(item)).join("\n");
   const sources = channelKinds
     .map((kind) => `<a class="source" href="/channels/${kind}">${kind}</a>`)
@@ -64,19 +65,18 @@ export function renderConnectionHtml(
 }
 
 export function renderAddSourceHtml(kind: ChannelKind): string {
+  const title = kind === "email" ? "Add email" : `Add ${kind}`;
   const signIn =
     kind === "email"
-      ? `<a class="quiet-pill" href="/oauth/google/start">Sign in with Google</a>
+      ? `<a class="quiet-pill" href="/oauth/google/start?return=${encodeURIComponent("/channels/email")}">Sign in with Google</a>
+    <p class="mute">Connecting never sends. Approve still owns send.</p>
     <p class="mute">Testing tokens die in 7 days.</p>`
       : kind === "slack"
-        ? `<a class="quiet-pill" href="/oauth/slack/start">Sign in with Slack</a>`
+        ? `<a class="quiet-pill" href="/oauth/slack/start?return=${encodeURIComponent("/channels/slack")}">Sign in with Slack</a>`
         : "";
   const fields =
     kind === "email"
-      ? `<label>IMAP user <input name="imap-user" /></label>
-    <label>IMAP password <input name="imap-password" type="password" /></label>
-    <label>SMTP host <input name="smtp-host" /></label>
-    <label>SMTP password <input name="smtp-password" type="password" /></label>`
+      ? ""
       : kind === "slack"
         ? `<label>Workspace <input name="workspace" /></label>
     <label>Slack token <input name="slack-token" type="password" /></label>`
@@ -86,12 +86,15 @@ export function renderAddSourceHtml(kind: ChannelKind): string {
             ? `<label>Database url <input name="db-url" /></label>`
             : `<label>Name <input name="mcp-name" /></label>
     <label>Command <input name="mcp-command" /></label>`;
-  return `<aside class="add-source" data-kind="${kind}">
-    <h3>Add source</h3>
-    ${signIn}
-    <form>${fields}
+  const form = fields
+    ? `<form>${fields}
       <button type="submit" class="quiet-pill">Add</button>
-    </form>
+    </form>`
+    : "";
+  return `<aside class="add-source" data-kind="${kind}">
+    <h3>${title}</h3>
+    ${signIn}
+    ${form}
   </aside>`;
 }
 
