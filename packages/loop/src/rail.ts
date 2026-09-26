@@ -222,8 +222,16 @@ export class RailEngine {
     return false;
   }
 
+  openRun(mailboxId: string, threadId: string): string | undefined {
+    return this.opens.get(`${mailboxId}\0${threadId}`);
+  }
+
   async phase(runId: string): Promise<RailPause["phase"]> {
     return (await this.pauseFor(runId)).phase;
+  }
+
+  async snapshot(runId: string): Promise<RailPause> {
+    return this.pauseFor(runId);
   }
 
   async resume(runId: string, event: HumanDecision | WaitEvent): Promise<RailPause> {
