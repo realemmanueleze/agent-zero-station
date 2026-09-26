@@ -129,13 +129,19 @@ export async function hydrateLedgerFromSql(url: string, ledger: SharedLedger): P
         state: String(row.state) as KitWait["state"],
       });
     }
-    const records = await client.query("SELECT id, tenant_id, body FROM records");
+    const records = await client.query("SELECT id, tenant_id, body, kind, actor FROM records");
     ledger.records.splice(0, ledger.records.length);
     for (const row of records.rows) {
+      const kind = String(row.kind ?? "");
+      if (kind !== "lead" && kind !== "traveler" && kind !== "job" && kind !== "client") {
+        continue;
+      }
       ledger.records.push({
         id: String(row.id),
         tenantId: String(row.tenant_id),
         body: String(row.body ?? ""),
+        kind,
+        actor: String(row.actor ?? ""),
       });
     }
   });
@@ -256,11 +262,10 @@ async function replaceKit(
   }
   await client.query("DELETE FROM records");
   for (const row of ledger.records) {
-    await client.query(`INSERT INTO records (id, tenant_id, body) VALUES ($1,$2,$3)`, [
-      row.id,
-      row.tenantId,
-      row.body,
-    ]);
+    await client.query(
+      `INSERT INTO records (id, tenant_id, body, kind, actor) VALUES ($1,$2,$3,$4,$5)`,
+      [row.id, row.tenantId, row.body, row.kind, row.actor],
+    );
   }
   for (const row of ledger.daCheckpoints ?? []) {
     const query = daCheckpointQuery(row);

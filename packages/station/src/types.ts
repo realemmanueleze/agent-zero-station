@@ -142,8 +142,14 @@ export type StationApi = {
       decisionId: string,
       input: { receipt: string; threadId?: string },
     ) => Promise<void>;
-    readContext: (tenantId: string) => Promise<Array<{ id: string; body: string }>>;
-    writeContext: (input: { id: string; tenantId: string; body: string }) => Promise<void>;
+    readContext: (tenantId: string) => Promise<Array<{ id: string; body: string; kind: string; actor: string }>>;
+    writeContext: (input: {
+      id: string;
+      tenantId: string;
+      body: string;
+      kind: "lead" | "traveler" | "job" | "client";
+      actor: string;
+    }) => Promise<void>;
     armCrash: (decisionId: string, point: "before-receipt") => Promise<void>;
     armProviderFailure: (decisionId: string) => Promise<void>;
     armProviderThread: (decisionId: string, threadId: string) => Promise<void>;

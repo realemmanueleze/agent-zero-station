@@ -141,6 +141,8 @@ describe("T32 kit contract", () => {
       id: "rec-b",
       tenantId: "tenant-b",
       body: "tenant-b-only-secret",
+      kind: "client",
+      actor: "station",
     });
     const rows = await station.kit.readContext("tenant-a");
     expect(rows.map((row) => row.body).join("\n")).not.toMatch(/tenant-b-only-secret/);
@@ -289,6 +291,8 @@ describe("T32 kit contract", () => {
       id: "rec-restart",
       tenantId: "tenant-a",
       body: "kept-across-restart",
+      kind: "client",
+      actor: "station",
     });
     expect(await first.send.providerCallCount(parked.sendId)).toBe(1);
 

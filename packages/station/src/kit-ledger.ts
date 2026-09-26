@@ -28,6 +28,8 @@ export type KitRecord = {
   id: string;
   tenantId: string;
   body: string;
+  kind: "lead" | "traveler" | "job" | "client";
+  actor: string;
 };
 
 export type KitDecisionRef = {
