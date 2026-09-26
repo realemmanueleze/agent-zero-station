@@ -984,7 +984,20 @@ export class Station implements StationApi {
     },
     readContext: async (tenantId) => this.kitLedger.readRecords(tenantId),
     writeContext: async (input) => {
-      this.kitLedger.writeRecord(input);
+      const kind = input.kind;
+      if (kind !== "lead" && kind !== "traveler" && kind !== "job" && kind !== "client") {
+        throw new StationError({
+          code: "invariant.unhandled",
+          message: "record kind is required",
+        });
+      }
+      if (!input.actor.trim()) {
+        throw new StationError({
+          code: "invariant.unhandled",
+          message: "actor is required",
+        });
+      }
+      this.kitLedger.writeRecord({ ...input, kind });
       await this.persistLedger();
     },
     armCrash: async (decisionId, _point) => {
@@ -1692,6 +1705,23 @@ export class Station implements StationApi {
         if (path.startsWith("/brief") && req.method === "GET") {
           const query = parsed.searchParams.get("q") ?? "";
           write(200, { brief: this.briefText(query) });
+          return;
+        }
+        if (path === "/hooks/lead" && req.method === "POST") {
+          const body = JSON.parse(rawBody || "{}") as {
+            id?: string;
+            tenantId?: string;
+            body?: string;
+            actor?: string;
+          };
+          await this.kit.writeContext({
+            id: body.id ?? "",
+            tenantId: body.tenantId ?? "",
+            body: body.body ?? "",
+            kind: "lead",
+            actor: body.actor ?? "",
+          });
+          write(200, { id: body.id });
           return;
         }
         if (path === "/form" && req.method === "POST") {
