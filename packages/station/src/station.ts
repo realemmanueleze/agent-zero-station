@@ -155,7 +155,8 @@ export class Station implements StationApi {
   private readonly connectionStore = new ConnectionStore(() => this.env);
   private readonly kitLedger = new KitLedger();
   private readonly workflows = new WorkflowDesk();
-  private readonly rail = createStationRail();
+  private railDelivery: ((state: { draft: string; threadId: string }) => Promise<void>) | null = null;
+  private readonly rail = createStationRail((state) => this.deliverRailSend(state));
   private workflowTimer: ReturnType<typeof setInterval> | null = null;
   private lastTraces: LiveToolTrace[] = [];
 
@@ -657,75 +658,20 @@ export class Station implements StationApi {
             message: "send is in flight",
           });
         }
-        this.ensureRun(row);
-        const log = createLogger({
-          service: "worker",
-          write: (line) => this.approveLogLines.push(line),
-        }).withContext({ requestId: `approve-${decisionId}` });
-        log.info("approve", { decisionId });
-        this.kitLedger.insertQueued(this.kitRef(row));
-        row.state = "sending";
-        await this.persistLedger();
-        try {
-          if (this.kitLedger.consumeFail(row.id)) {
-            await this.callProvider(row.sendId, false);
-            this.kitLedger.markFailed(row.sendId);
-            row.state = "parked";
-            await this.persistLedger();
-            throw new StationError({
-              code: "send.provider_failed",
-              message: "provider failed",
-            });
+        if (row.runId && this.rail.has(row.runId) && (await this.rail.phase(row.runId)) === "human_review") {
+          let receipt: { sendId: string; providerMessageId?: string } | undefined;
+          this.railDelivery = async (state) => {
+            row.body = state.draft;
+            receipt = await this.commitOutbox(row);
+          };
+          try {
+            await this.rail.resume(row.runId, { action: "approve" });
+          } finally {
+            this.railDelivery = null;
           }
-          await approveWithConnection(this.connectionStore, {
-            account: row.account,
-            body: row.body,
-            sendTo: row.sendTo,
-          });
-        } catch (err) {
-          if (err instanceof StationError && err.code === "send.provider_failed") {
-            throw err;
-          }
-          if (isPreProvider(err)) {
-            this.kitLedger.rollbackQueued(row.sendId);
-            row.state = "parked";
-            await this.persistLedger();
-            throw err;
-          }
-          await this.callProvider(row.sendId, false);
-          this.kitLedger.markFailed(row.sendId);
-          row.state = "parked";
-          await this.persistLedger();
-          throw new StationError({
-            code: "send.provider_failed",
-            message: "provider failed",
-            cause: err,
-          });
+          return receipt ?? { sendId: row.sendId };
         }
-        await this.callProvider(row.sendId, false);
-        this.kitLedger.markAttempted(row.sendId);
-        if (this.kitLedger.consumeCrash(row.id)) {
-          await this.persistLedger();
-          throw new StationError({
-            code: "send.in_flight",
-            message: "crashed before receipt",
-          });
-        }
-        if (row.killed) {
-          return { sendId: row.sendId };
-        }
-        const receipt = `msg-${row.sendId}`;
-        this.kitLedger.storeReceipt(row.sendId, receipt, this.kitLedger.providerThread(row.id), false);
-        const committed = this.kitLedger.commitSent(this.kitRef(row));
-        row.state = "sent";
-        await this.persistLedger();
-        if (committed === "conflict") {
-          throw new StationError({
-            code: "run.wait_conflict",
-            message: "open reply wait exists",
-          });
-        }
-        return { sendId: row.sendId, providerMessageId: receipt };
+        return this.commitOutbox(row);
       }),
     commitSend: async (input) => {
       if (input.fail) {
@@ -752,6 +698,12 @@ export class Station implements StationApi {
       if (row.producerRef) {
         this.leases.delete(row.producerRef);
       }
+      if (row.runId && this.rail.has(row.runId)) {
+        const phase = await this.rail.phase(row.runId);
+        if (phase === "human_review" || phase === "wait_for_reply") {
+          await this.rail.resume(row.runId, { action: "kill" });
+        }
+      }
       await this.persistLedger();
     },
     edit: async (decisionId, body) => {
@@ -764,6 +716,9 @@ export class Station implements StationApi {
         });
       }
       row.body = beforePark(body);
+      if (row.runId && this.rail.has(row.runId) && (await this.rail.phase(row.runId)) === "human_review") {
+        await this.rail.resume(row.runId, { action: "edit", body: row.body });
+      }
       row.state = "parked";
       await this.persistLedger();
       return { state: row.state, body: row.body };
@@ -802,24 +757,27 @@ export class Station implements StationApi {
           ),
         };
       }
-      const items = [...this.decisions.values()].map((row) => ({
-        id: row.id,
-        state: row.state,
-        actions: this.parkActions(row),
-        runId: row.runId ?? null,
-        wait: this.waitView(row),
-        outbox: this.outboxView(row),
-        tenantId: row.tenantId,
-        packId: row.packId,
-        body: row.body,
-        from: row.from,
-        subject: row.subject,
-        amount: row.amount,
-        rationale: row.rationale,
-        channel: (row.kind ?? "email") as "email",
-        accountId: row.account ?? stationConfig.email[0]?.id,
-        killPhase: row.killPhase ?? null,
-      }));
+      const items = await Promise.all(
+        [...this.decisions.values()].map(async (row) => ({
+          id: row.id,
+          state: row.state,
+          actions: this.parkActions(row),
+          runId: row.runId ?? null,
+          wait: this.waitView(row),
+          outbox: this.outboxView(row),
+          tenantId: row.tenantId,
+          packId: row.packId,
+          body: row.body,
+          from: row.from,
+          subject: row.subject,
+          amount: row.amount,
+          rationale: row.rationale,
+          channel: (row.kind ?? "email") as "email",
+          accountId: row.account ?? stationConfig.email[0]?.id,
+          killPhase: row.killPhase ?? null,
+          phase: row.runId && this.rail.has(row.runId) ? await this.rail.phase(row.runId) : null,
+        })),
+      );
       return { status: 200, json: { items } };
     },
     approveFromBrowser: async (decisionId) => {
@@ -949,21 +907,29 @@ export class Station implements StationApi {
     parkInbound: async (input) => {
       const sendId = `send-${input.id}`;
       const runId = randomUUID();
+      const pause = await this.rail.start({
+        runId,
+        mailboxId: input.mailboxId,
+        threadId: input.threadId,
+        thread: input.body,
+      });
+      const onRail = pause.runId === runId;
+      const keptRun = onRail ? pause.runId : runId;
       this.decisions.set(input.id, {
         id: input.id,
         sendId,
         state: "parked",
-        body: input.body,
+        body: onRail ? pause.draft : input.body,
         tenantId: input.tenantId,
         packId: "sales",
-        runId,
+        runId: keptRun,
         mailboxId: input.mailboxId,
         threadId: input.threadId,
         producerRef: input.producerRef,
         killed: false,
       });
       this.sendIds.add(sendId);
-      return { decisionId: input.id, runId, sendId };
+      return { decisionId: input.id, runId: keptRun, sendId };
     },
     outbox: async (decisionId) => {
       const row = this.kitLedger.outboxFor(decisionId);
@@ -1426,6 +1392,88 @@ export class Station implements StationApi {
       log.warn("send.in_flight", { sendIds: scan.warned.length });
     }
     return { warned: scan.warned, completed: scan.completed.map((item) => item.sendId) };
+  }
+
+  private async deliverRailSend(state: { draft: string; threadId: string }): Promise<void> {
+    if (!this.railDelivery) {
+      throw new StationError({
+        code: "invariant.unhandled",
+        message: "rail send has no decision",
+      });
+    }
+    await this.railDelivery(state);
+  }
+
+  private async commitOutbox(row: Decision): Promise<{ sendId: string; providerMessageId?: string }> {
+    this.ensureRun(row);
+    const log = createLogger({
+      service: "worker",
+      write: (line) => this.approveLogLines.push(line),
+    }).withContext({ requestId: `approve-${row.id}` });
+    log.info("approve", { decisionId: row.id });
+    this.kitLedger.insertQueued(this.kitRef(row));
+    row.state = "sending";
+    await this.persistLedger();
+    try {
+      if (this.kitLedger.consumeFail(row.id)) {
+        await this.callProvider(row.sendId, false);
+        this.kitLedger.markFailed(row.sendId);
+        row.state = "parked";
+        await this.persistLedger();
+        throw new StationError({
+          code: "send.provider_failed",
+          message: "provider failed",
+        });
+      }
+      await approveWithConnection(this.connectionStore, {
+        account: row.account,
+        body: row.body,
+        sendTo: row.sendTo,
+      });
+    } catch (err) {
+      if (err instanceof StationError && err.code === "send.provider_failed") {
+        throw err;
+      }
+      if (isPreProvider(err)) {
+        this.kitLedger.rollbackQueued(row.sendId);
+        row.state = "parked";
+        await this.persistLedger();
+        throw err;
+      }
+      await this.callProvider(row.sendId, false);
+      this.kitLedger.markFailed(row.sendId);
+      row.state = "parked";
+      await this.persistLedger();
+      throw new StationError({
+        code: "send.provider_failed",
+        message: "provider failed",
+        cause: err,
+      });
+    }
+    await this.callProvider(row.sendId, false);
+    this.kitLedger.markAttempted(row.sendId);
+    if (this.kitLedger.consumeCrash(row.id)) {
+      await this.persistLedger();
+      throw new StationError({
+        code: "send.in_flight",
+        message: "crashed before receipt",
+      });
+    }
+    if (row.killed) {
+      return { sendId: row.sendId };
+    }
+    const receipt = `msg-${row.sendId}`;
+    this.kitLedger.storeReceipt(row.sendId, receipt, this.kitLedger.providerThread(row.id), false);
+    const committed = this.kitLedger.commitSent(this.kitRef(row));
+    row.state = "sent";
+    await this.persistLedger();
+    if (committed === "conflict") {
+      throw new StationError({
+        code: "run.wait_conflict",
+        message: "open reply wait exists",
+      });
+    }
+    return { sendId: row.sendId, providerMessageId: receipt };
   }
 
   private async callProvider(sendId: string, force: boolean): Promise<void> {

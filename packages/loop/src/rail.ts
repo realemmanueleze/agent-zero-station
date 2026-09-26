@@ -107,7 +107,7 @@ export class RailEngine {
 
   constructor(
     private readonly opts: {
-      send: (state: { draft: string; threadId: string }) => void;
+      send: (state: { draft: string; threadId: string }) => void | Promise<void>;
       store?: RailStore;
     },
   ) {
@@ -141,11 +141,11 @@ export class RailEngine {
         }
         return { approval: "approved" as const, phase: "send", trace: ["human_review"] };
       })
-      .addNode("send_email", (state) => {
+      .addNode("send_email", async (state) => {
         if (state.approval !== "approved") {
           return { phase: "done", trace: ["send_email"] };
         }
-        send({ draft: state.draft, threadId: state.threadId });
+        await send({ draft: state.draft, threadId: state.threadId });
         return { sentCount: state.sentCount + 1, phase: "waiting", trace: ["send_email"] };
       })
       .addNode("wait_for_reply", (state) => {
@@ -211,6 +211,19 @@ export class RailEngine {
     )) as GraphResult;
     this.opens.set(openKey, input.runId);
     return asPause(input.runId, result);
+  }
+
+  has(runId: string): boolean {
+    for (const id of this.opens.values()) {
+      if (id === runId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async phase(runId: string): Promise<RailPause["phase"]> {
+    return (await this.pauseFor(runId)).phase;
   }
 
   async resume(runId: string, event: HumanDecision | WaitEvent): Promise<RailPause> {
