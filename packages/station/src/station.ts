@@ -22,6 +22,7 @@ import { catalogEquals } from "./catalog.ts";
 import { approveWithConnection, ConnectionStore, handleVaultRequest } from "./connections.ts";
 import { NANGO_WEBHOOK_MAX_BYTES } from "./nango.ts";
 import { fixtureInbound, inboundDecisionId, type ProducedEmail } from "./email-producer.ts";
+import { applyDial } from "./dial.ts";
 import { WorkflowDesk, type GmailMailbox, type MailHit } from "./workflow.ts";
 import { CONFIG_READ_KEYS } from "./keys.ts";
 import { stationConfig } from "./station-config.ts";
@@ -910,6 +911,7 @@ export class Station implements StationApi {
 
   kit: StationApi["kit"] = {
     parkInbound: async (input) => {
+      applyDial(input.id);
       const sendId = `send-${input.id}`;
       const runId = randomUUID();
       const pause = await this.rail.start({
