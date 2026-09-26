@@ -1,5 +1,5 @@
-import { workerRedirect } from "../../../../lib/worker.ts";
+import { oauthWorkerRedirect } from "../../../../lib/worker.ts";
 
-export async function GET() {
-  return workerRedirect("/oauth/slack/start");
+export async function GET(req: Request) {
+  return oauthWorkerRedirect("/oauth/slack/start", req);
 }

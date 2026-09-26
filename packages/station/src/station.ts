@@ -10,7 +10,7 @@ import {
   toClientError,
   type Logger,
 } from "@station/observability";
-import { getPack, type PackScore, type PackSignal } from "@station/packs";
+import { getPack, listPackIds, type PackScore, type PackSignal } from "@station/packs";
 import {
   runLiveTurn,
   runScoringTurn,
@@ -20,12 +20,15 @@ import {
 import { mailboxesFromConfig, normalizeGraphMessage, queryPackSql, vaultSearch } from "@station/channels";
 import { catalogEquals } from "./catalog.ts";
 import { approveWithConnection, ConnectionStore, handleVaultRequest } from "./connections.ts";
-import type { ProducedEmail } from "./email-producer.ts";
+import { NANGO_WEBHOOK_MAX_BYTES } from "./nango.ts";
+import { fixtureInbound, inboundDecisionId, type ProducedEmail } from "./email-producer.ts";
+import { WorkflowDesk, type GmailMailbox, type MailHit } from "./workflow.ts";
 import { CONFIG_READ_KEYS } from "./keys.ts";
 import { stationConfig } from "./station-config.ts";
 import { getSharedLedger } from "./ledger.ts";
 import { flushLedgerToSql, hydrateLedgerFromSql } from "./persist-sql.ts";
 import { applyLedgerMigration } from "./postgres.ts";
+import { KitLedger, type KitDecisionRef } from "./kit-ledger.ts";
 import type {
   EmailPayload,
   ParkItem,
@@ -51,6 +54,12 @@ type Decision = {
   account?: string;
   kind?: "email" | "slack" | "obsidian" | "db" | "mcp";
   sendTo?: string;
+  runId?: string;
+  mailboxId?: string;
+  threadId?: string;
+  producerRef?: string;
+  killed?: boolean;
+  killPhase?: "unsent" | "inflight" | "sent";
 };
 
 type Signal = {
@@ -67,7 +76,16 @@ type Lease = {
 
 const DENY_MCP = /send|mail|post|write/i;
 const LEASE_MS = 30_000;
-const LEDGER_TABLES = ["signals", "claims", "leases", "decisions", "connections"];
+const LEDGER_TABLES = [
+  "signals",
+  "claims",
+  "leases",
+  "decisions",
+  "connections",
+  "outbox",
+  "waits",
+  "records",
+];
 const CHECKPOINTER_TABLES = ["da_checkpoints", "da_writes"];
 
 function assertNever(value: never): never {
@@ -75,6 +93,15 @@ function assertNever(value: never): never {
     code: "invariant.unhandled",
     message: `unhandled state ${String(value)}`,
   });
+}
+
+function isPreProvider(err: unknown): boolean {
+  return (
+    err instanceof StationError &&
+    (err.code === "connections.missing" ||
+      err.code === "connections.needs_reauth" ||
+      err.code === "connections.invalid")
+  );
 }
 
 function beforePark(body: string): string {
@@ -89,6 +116,19 @@ function draftBody(packId: string, signal: unknown, scores: unknown): string {
 
 function isLocalHost(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host === "::1";
+}
+
+function vaultMutationArmsProducers(path: string, method: string): boolean {
+  if (method !== "POST") {
+    return false;
+  }
+  if (path === "/nango/complete" || path === "/nango/import" || path === "/nango/webhook") {
+    return true;
+  }
+  if (path === "/connections") {
+    return true;
+  }
+  return /^\/connections\/[^/]+\/test$/.test(path);
 }
 
 export class Station implements StationApi {
@@ -112,6 +152,9 @@ export class Station implements StationApi {
   private claimChain: Promise<unknown> = Promise.resolve();
   private approveLocks = new Map<string, Promise<void>>();
   private readonly connectionStore = new ConnectionStore(() => this.env);
+  private readonly kitLedger = new KitLedger();
+  private readonly workflows = new WorkflowDesk();
+  private workflowTimer: ReturnType<typeof setInterval> | null = null;
   private lastTraces: LiveToolTrace[] = [];
 
   constructor(opts?: { seed?: boolean }) {
@@ -432,10 +475,18 @@ export class Station implements StationApi {
       });
       const address = server.address();
       const port = typeof address === "object" && address ? address.port : 0;
+      this.runBootScan();
+      this.workflowTimer = setInterval(() => {
+        void this.runDueWorkflows();
+      }, 15_000);
       return {
         port,
         close: () =>
           new Promise<void>((resolve, reject) => {
+            if (this.workflowTimer) {
+              clearInterval(this.workflowTimer);
+              this.workflowTimer = null;
+            }
             this.stopPollers();
             server.close((err) => (err ? reject(err) : resolve()));
           }),
@@ -480,7 +531,11 @@ export class Station implements StationApi {
           req.destroy();
           resolve({ status: 504, json: {}, logs: [] });
         });
-        req.end();
+        if (opts.body) {
+          req.end(opts.body);
+        } else {
+          req.end();
+        }
       });
     },
     claimSignal: (signalId, packId, workerId) =>
@@ -517,17 +572,22 @@ export class Station implements StationApi {
     startLiveProducers: async (workerId) => {
       const live = this.connectionStore
         .list()
-        .filter((row) => row.kind === "email" && row.status === "live");
+        .filter((row) => (row.kind === "email" || row.kind === "slack") && row.status === "live");
       const cap = stationConfig.mailProducerCap;
+      const running = [...this.producerStarts.values()].filter((count) => count > 0).length;
       let started = 0;
       let skipped = 0;
       for (const row of live) {
-        if (started >= cap) {
+        const producerRef = `${row.kind}:${row.account}`;
+        if ((this.producerStarts.get(producerRef) ?? 0) > 0) {
+          continue;
+        }
+        if (running + started >= cap) {
           skipped += 1;
           continue;
         }
         try {
-          const result = await this.worker.startProducer(`email:${row.account}`, workerId);
+          const result = await this.worker.startProducer(producerRef, workerId);
           if (result.started) {
             started += 1;
           }
@@ -544,10 +604,42 @@ export class Station implements StationApi {
     lastLiveTraces: async () => this.lastTraces,
   };
 
-  send: StationApi["send"] = {
+    send: StationApi["send"] = {
     approve: (decisionId) =>
       this.lockApprove(decisionId, async () => {
         const row = this.requireDecision(decisionId);
+        const existing = this.kitLedger.outboxFor(decisionId);
+        if (row.killed || existing?.state === "killed") {
+          throw new StationError({
+            code: "send.killed",
+            message: "decision is killed",
+          });
+        }
+        if (existing?.state === "sent") {
+          return { sendId: existing.sendId, providerMessageId: existing.receipt ?? undefined };
+        }
+        if (existing?.state === "parked_failed") {
+          throw new StationError({
+            code: "send.already_attempted",
+            message: "send already attempted",
+          });
+        }
+        if (existing?.state === "queued") {
+          if (existing.receipt) {
+            this.runBootScan();
+            const again = this.kitLedger.outboxFor(decisionId);
+            if (again?.state === "sent") {
+              return { sendId: again.sendId, providerMessageId: again.receipt ?? undefined };
+            }
+          }
+          throw new StationError({
+            code: "send.in_flight",
+            message: "send is in flight",
+          });
+        }
+        if (existing) {
+          return assertNever(existing.state);
+        }
         if (row.state === "sent") {
           return { sendId: row.sendId };
         }
@@ -557,66 +649,118 @@ export class Station implements StationApi {
             message: "decision is dropped",
           });
         }
+        if (row.state === "sending") {
+          throw new StationError({
+            code: "send.in_flight",
+            message: "send is in flight",
+          });
+        }
+        this.ensureRun(row);
         const log = createLogger({
           service: "worker",
           write: (line) => this.approveLogLines.push(line),
         }).withContext({ requestId: `approve-${decisionId}` });
-        log.info("approve", { decisionId, body: row.body });
-        await approveWithConnection(this.connectionStore, {
-          account: row.account,
-          body: row.body,
-          sendTo: row.sendTo,
-        });
-        if (row.state === "parked") {
-          row.state = "sending";
+        log.info("approve", { decisionId });
+        this.kitLedger.insertQueued(this.kitRef(row));
+        row.state = "sending";
+        await this.persistLedger();
+        try {
+          if (this.kitLedger.consumeFail(row.id)) {
+            await this.callProvider(row.sendId, false);
+            this.kitLedger.markFailed(row.sendId);
+            row.state = "parked";
+            await this.persistLedger();
+            throw new StationError({
+              code: "send.provider_failed",
+              message: "provider failed",
+            });
+          }
+          await approveWithConnection(this.connectionStore, {
+            account: row.account,
+            body: row.body,
+            sendTo: row.sendTo,
+          });
+        } catch (err) {
+          if (err instanceof StationError && err.code === "send.provider_failed") {
+            throw err;
+          }
+          if (isPreProvider(err)) {
+            this.kitLedger.rollbackQueued(row.sendId);
+            row.state = "parked";
+            await this.persistLedger();
+            throw err;
+          }
+          await this.callProvider(row.sendId, false);
+          this.kitLedger.markFailed(row.sendId);
+          row.state = "parked";
+          await this.persistLedger();
+          throw new StationError({
+            code: "send.provider_failed",
+            message: "provider failed",
+            cause: err,
+          });
         }
         await this.callProvider(row.sendId, false);
+        this.kitLedger.markAttempted(row.sendId);
+        if (this.kitLedger.consumeCrash(row.id)) {
+          await this.persistLedger();
+          throw new StationError({
+            code: "send.in_flight",
+            message: "crashed before receipt",
+          });
+        }
+        if (row.killed) {
+          return { sendId: row.sendId };
+        }
+        const receipt = `msg-${row.sendId}`;
+        this.kitLedger.storeReceipt(row.sendId, receipt, this.kitLedger.providerThread(row.id), false);
+        const committed = this.kitLedger.commitSent(this.kitRef(row));
         row.state = "sent";
         await this.persistLedger();
-        return { sendId: row.sendId };
+        if (committed === "conflict") {
+          throw new StationError({
+            code: "run.wait_conflict",
+            message: "open reply wait exists",
+          });
+        }
+        return { sendId: row.sendId, providerMessageId: receipt };
       }),
     commitSend: async (input) => {
-      const row = [...this.decisions.values()].find((item) => item.sendId === input.sendId);
       if (input.fail) {
-        if (row) {
-          row.state = "parked";
-        }
         throw new StationError({
           code: "send.provider_failed",
           message: "provider failed",
         });
       }
-      if (!row) {
-        throw new StationError({
-          code: "invariant.unhandled",
-          message: "unknown sendId",
-        });
-      }
-      await this.callProvider(input.sendId, false);
-      row.state = "sent";
       return { sendId: input.sendId };
     },
     kill: async (decisionId) => {
       const row = this.requireDecision(decisionId);
-      switch (row.state) {
-        case "parked":
-        case "sending":
-          row.state = "dropped";
-          await this.persistLedger();
-          return;
-        case "sent":
-          throw new StationError({
-            code: "send.already_sent",
-            message: "already sent",
-          });
-        case "dropped":
-          return;
-        default:
-          return assertNever(row.state);
+      const existing = this.kitLedger.outboxFor(decisionId);
+      if (row.state === "sent" || existing?.state === "sent") {
+        row.killPhase = "sent";
+      } else if (row.state === "sending" || existing?.state === "queued") {
+        row.killPhase = "inflight";
+      } else {
+        row.killPhase = "unsent";
       }
+      row.killed = true;
+      row.state = "dropped";
+      this.kitLedger.kill(row.id, row.runId);
+      if (row.producerRef) {
+        this.leases.delete(row.producerRef);
+      }
+      await this.persistLedger();
     },
     edit: async (decisionId, body) => {
       const row = this.requireDecision(decisionId);
+      const existing = this.kitLedger.outboxFor(decisionId);
+      if (existing) {
+        throw new StationError({
+          code: existing.state === "killed" ? "send.killed" : existing.state === "queued" ? "send.in_flight" : "send.already_attempted",
+          message: "edit is closed",
+        });
+      }
       row.body = beforePark(body);
       row.state = "parked";
       await this.persistLedger();
@@ -659,7 +803,10 @@ export class Station implements StationApi {
       const items = [...this.decisions.values()].map((row) => ({
         id: row.id,
         state: row.state,
-        actions: ["Approve", "Edit", "Kill"] as ParkItem["actions"],
+        actions: this.parkActions(row),
+        runId: row.runId ?? null,
+        wait: this.waitView(row),
+        outbox: this.outboxView(row),
         tenantId: row.tenantId,
         packId: row.packId,
         body: row.body,
@@ -669,6 +816,7 @@ export class Station implements StationApi {
         rationale: row.rationale,
         channel: (row.kind ?? "email") as "email",
         accountId: row.account ?? stationConfig.email[0]?.id,
+        killPhase: row.killPhase ?? null,
       }));
       return { status: 200, json: { items } };
     },
@@ -739,6 +887,7 @@ export class Station implements StationApi {
       return ids.size;
     },
     rescore: async (signalIds, packId) => {
+      getPack(packId);
       this.latestPackId = packId;
       for (const row of this.decisions.values()) {
         const signal = this.signals.get(row.signalId ?? row.id);
@@ -766,7 +915,6 @@ export class Station implements StationApi {
     promptBuffer: async (tenantId) => this.promptByTenant.get(tenantId) ?? "",
     commitSend: async (input) => {
       this.sendIds.add(input.sendId);
-      await this.callProvider(input.sendId, false);
       return { sendId: input.sendId };
     },
     sendFromAuthFailure: async (status) => {
@@ -795,21 +943,181 @@ export class Station implements StationApi {
     },
   };
 
+  kit: StationApi["kit"] = {
+    parkInbound: async (input) => {
+      const sendId = `send-${input.id}`;
+      const runId = randomUUID();
+      this.decisions.set(input.id, {
+        id: input.id,
+        sendId,
+        state: "parked",
+        body: input.body,
+        tenantId: input.tenantId,
+        packId: "sales",
+        runId,
+        mailboxId: input.mailboxId,
+        threadId: input.threadId,
+        producerRef: input.producerRef,
+        killed: false,
+      });
+      this.sendIds.add(sendId);
+      return { decisionId: input.id, runId, sendId };
+    },
+    outbox: async (decisionId) => {
+      const row = this.kitLedger.outboxFor(decisionId);
+      if (!row) {
+        return null;
+      }
+      return {
+        sendId: row.sendId,
+        runId: row.runId,
+        decisionId: row.decisionId,
+        state: row.state,
+        attempts: row.attempts,
+        receipt: row.receipt,
+      };
+    },
+    waits: async (runId) => this.kitLedger.waitsFor(runId),
+    bootScan: async () => this.runBootScan(),
+    postReceipt: async (decisionId, input) => {
+      const row = this.requireDecision(decisionId);
+      if (!input.receipt) {
+        throw new StationError({
+          code: "invariant.unhandled",
+          message: "receipt is required",
+        });
+      }
+      if (row.killed) {
+        throw new StationError({
+          code: "send.killed",
+          message: "decision is killed",
+        });
+      }
+      const stored = this.kitLedger.storeReceipt(
+        row.sendId,
+        input.receipt,
+        input.threadId ?? null,
+        row.killed === true,
+      );
+      if (!stored) {
+        throw new StationError({
+          code: "send.killed",
+          message: "decision is killed",
+        });
+      }
+      await this.persistLedger();
+    },
+    readContext: async (tenantId) => this.kitLedger.readRecords(tenantId),
+    writeContext: async (input) => {
+      this.kitLedger.writeRecord(input);
+      await this.persistLedger();
+    },
+    armCrash: async (decisionId, _point) => {
+      this.kitLedger.armCrash(decisionId);
+    },
+    armProviderFailure: async (decisionId) => {
+      this.kitLedger.armFail(decisionId);
+    },
+    armProviderThread: async (decisionId, threadId) => {
+      this.kitLedger.armThread(decisionId, threadId);
+    },
+    resumeReply: async (input) => {
+      const wait = this.kitLedger.resume(input.mailboxId, input.threadId);
+      if (!wait) {
+        throw new StationError({
+          code: "invariant.unhandled",
+          message: "no open reply wait",
+        });
+      }
+      const decisionId = `reply-${randomUUID()}`;
+      const sendId = `send-${decisionId}`;
+      this.decisions.set(decisionId, {
+        id: decisionId,
+        sendId,
+        state: "parked",
+        body: input.body,
+        tenantId: wait.tenantId,
+        packId: "sales",
+        runId: wait.runId,
+        mailboxId: input.mailboxId,
+        threadId: input.threadId,
+        killed: false,
+      });
+      this.sendIds.add(sendId);
+      return { runId: wait.runId, decisionId };
+    },
+    settleInFlight: async (decisionId, input) => {
+      const row = this.requireDecision(decisionId);
+      const existing = this.kitLedger.outboxFor(decisionId);
+      if (!existing || existing.state !== "queued" || row.killed) {
+        return;
+      }
+      this.ensureRun(row);
+      const stored = this.kitLedger.storeReceipt(
+        row.sendId,
+        input.receipt,
+        input.threadId ?? null,
+        row.killed === true,
+      );
+      if (!stored) {
+        return;
+      }
+      const committed = this.kitLedger.commitSent(this.kitRef(row));
+      if (committed === "skipped") {
+        return;
+      }
+      row.state = "sent";
+    },
+    insertTimer: async (input) => {
+      this.kitLedger.insertTimer(input);
+    },
+    wakeDueTimers: async (now) => {
+      const due = this.kitLedger.takeDue(now);
+      const first = due[0];
+      if (!first) {
+        throw new StationError({
+          code: "invariant.unhandled",
+          message: "no timer is due",
+        });
+      }
+      const decisionId = `timer-${randomUUID()}`;
+      const sendId = `send-${decisionId}`;
+      this.decisions.set(decisionId, {
+        id: decisionId,
+        sendId,
+        state: "parked",
+        body: "timer draft",
+        tenantId: first.tenantId,
+        packId: "sales",
+        runId: first.runId,
+        mailboxId: first.mailboxId,
+        threadId: first.threadId,
+        killed: false,
+      });
+      this.sendIds.add(sendId);
+      return { decisionId, runId: first.runId };
+    },
+  };
+
   private pollMs(): number {
     const raw = Number(this.env.STATION_POLL_MS ?? 30_000);
     return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
   }
 
   private async pollProducer(producerRef: string): Promise<void> {
-    if (!producerRef.startsWith("email:")) {
+    const email = producerRef.startsWith("email:");
+    const slack = producerRef.startsWith("slack:");
+    if (!email && !slack) {
       this.producerTicks.set(producerRef, (this.producerTicks.get(producerRef) ?? 0) + 1);
       return;
     }
-    const account = producerRef.slice("email:".length);
-    const produced = await this.connectionStore.pollAccount(account);
+    const kind = email ? "email" : "slack";
+    const account = producerRef.slice(`${kind}:`.length);
+    const produced = await this.connectionStore.pollAccount(account, kind);
     for (const msg of produced) {
       this.parkProduced(msg);
     }
+    this.runBootScan();
     this.producerTicks.set(producerRef, (this.producerTicks.get(producerRef) ?? 0) + 1);
   }
 
@@ -829,10 +1137,12 @@ export class Station implements StationApi {
     account: string;
     detail: string;
     channel: string;
+    killPhase?: "unsent" | "inflight" | "sent";
   }> {
     return [...this.decisions.values()].map((row) => ({
       id: `decision-${row.id}`,
       action: row.state,
+      killPhase: row.killPhase,
       account: row.account ?? row.tenantId,
       detail: row.subject ?? row.body ?? row.id,
       channel: row.kind ?? "email",
@@ -903,10 +1213,80 @@ export class Station implements StationApi {
     this.claims = shared.claims;
     this.leases = shared.leases;
     this.sendIds = shared.sendIds;
+    this.kitLedger.attach(shared);
+  }
+
+  private gmailMailboxes(): GmailMailbox[] {
+    const boxes: GmailMailbox[] = [];
+    for (const row of this.connectionStore.list()) {
+      if (row.kind !== "email" || row.status !== "live") {
+        continue;
+      }
+      const stored = this.connectionStore.find("email", row.account);
+      if (!stored) {
+        continue;
+      }
+      const fields = JSON.parse(this.connectionStore.decryptRow(stored)) as {
+        provider?: string;
+        refreshToken?: string;
+        accessToken?: string;
+        expiresAt?: string;
+      };
+      if (fields.provider !== "gmail" || !fields.refreshToken) {
+        continue;
+      }
+      boxes.push({
+        account: row.account,
+        refreshToken: fields.refreshToken,
+        accessToken: fields.accessToken ?? "",
+        expiresAt: fields.expiresAt ?? "",
+      });
+    }
+    return boxes;
+  }
+
+  private parkWorkflowHits(hits: MailHit[]): void {
+    for (const hit of hits) {
+      const id = `thread-${hit.account}-${hit.threadId}`;
+      if (this.decisions.has(id)) {
+        continue;
+      }
+      const address = hit.from.match(/<([^>]+)>/)?.[1] ?? hit.from;
+      this.decisions.set(id, {
+        id,
+        sendId: `send-${id}`,
+        state: "parked",
+        body: hit.draft,
+        tenantId: hit.account,
+        packId: this.latestPackId,
+        account: hit.account,
+        kind: "email",
+        sendTo: address,
+        from: hit.from,
+        subject: hit.subject.startsWith("Re:") ? hit.subject : `Re: ${hit.subject}`,
+        rationale: hit.thread,
+      });
+      this.sendIds.add(`send-${id}`);
+    }
+    void this.persistLedger();
+  }
+
+  private async runDueWorkflows(): Promise<void> {
+    const runs = await this.workflows.tick(Date.now(), {
+      mailboxes: this.gmailMailboxes(),
+      fetchImpl: fetch,
+      env: this.env,
+    });
+    for (const run of runs) {
+      this.parkWorkflowHits(run.needsAction);
+    }
   }
 
   private parkProduced(msg: ProducedEmail): void {
-    const id = `prod-${msg.account}-${Date.now()}`;
+    const id = inboundDecisionId(msg);
+    if (this.decisions.has(id)) {
+      return;
+    }
     const signal = {
       fixtureId: id,
       tenantId: msg.account,
@@ -967,6 +1347,84 @@ export class Station implements StationApi {
     return row;
   }
 
+  private ensureRun(row: Decision): void {
+    if (!row.runId) {
+      row.runId = randomUUID();
+    }
+    if (!row.mailboxId) {
+      row.mailboxId = row.account ?? `box-${row.id}`;
+    }
+    if (!row.threadId) {
+      row.threadId = `thread-${row.id}`;
+    }
+  }
+
+  private kitRef(row: Decision): KitDecisionRef {
+    this.ensureRun(row);
+    return {
+      id: row.id,
+      sendId: row.sendId,
+      runId: row.runId ?? "",
+      tenantId: row.tenantId,
+      mailboxId: row.mailboxId ?? "",
+      threadId: row.threadId ?? "",
+      killed: row.killed === true,
+    };
+  }
+
+  private parkActions(row: Decision): ParkItem["actions"] {
+    if (row.state === "parked") {
+      return ["Approve", "Edit", "Kill"];
+    }
+    if (row.state === "sending") {
+      return ["Kill"];
+    }
+    return [];
+  }
+
+  private outboxView(row: Decision): { sendId: string; state: string; attempts: number } | null {
+    const outbox = this.kitLedger.outboxFor(row.id);
+    if (!outbox) {
+      return null;
+    }
+    return { sendId: outbox.sendId, state: outbox.state, attempts: outbox.attempts };
+  }
+
+  private waitView(row: Decision): { state: string; reason: string; wakeAt: string | null } | null {
+    if (!row.runId) {
+      return null;
+    }
+    const open = this.kitLedger.waitsFor(row.runId).find((wait) => wait.state === "open");
+    if (!open) {
+      return null;
+    }
+    return { state: open.state, reason: open.reason, wakeAt: open.wakeAt };
+  }
+
+  private runBootScan(): { warned: string[]; completed: string[] } {
+    const scan = this.kitLedger.bootScan((decisionId) => {
+      const row = this.decisions.get(decisionId);
+      if (!row) {
+        return null;
+      }
+      return this.kitRef(row);
+    });
+    for (const item of scan.completed) {
+      const row = this.decisions.get(item.decisionId);
+      if (row && !row.killed) {
+        row.state = "sent";
+      }
+    }
+    if (scan.warned.length > 0) {
+      const log = createLogger({
+        service: "worker",
+        write: (line) => this.workerLogs.push(line),
+      }).withContext({ requestId: "boot-scan" });
+      log.warn("send.in_flight", { sendIds: scan.warned.length });
+    }
+    return { warned: scan.warned, completed: scan.completed.map((item) => item.sendId) };
+  }
+
   private async callProvider(sendId: string, force: boolean): Promise<void> {
     const current = this.providerCalls.get(sendId) ?? 0;
     if (!force && current > 0) {
@@ -1019,7 +1477,7 @@ export class Station implements StationApi {
         }
         const rawBody =
           req.method === "POST" || req.method === "PUT" || req.method === "PATCH"
-            ? await readRequestBody(req)
+            ? await readRequestBody(req, path === "/nango/webhook" ? NANGO_WEBHOOK_MAX_BYTES : 1_048_576)
             : "";
         if (
           await handleVaultRequest({
@@ -1031,9 +1489,34 @@ export class Station implements StationApi {
             env: this.env,
             write,
             redirect,
+            headers: {
+              "x-nango-hmac-sha256": headerValue(req.headers, "x-nango-hmac-sha256"),
+            },
           })
         ) {
           await this.persistLedger();
+          if (vaultMutationArmsProducers(path, req.method ?? "GET")) {
+            await this.worker.startLiveProducers("connect");
+          }
+          return;
+        }
+        const receiptPost = path.match(/^\/park\/([^/]+)\/receipt$/);
+        if (receiptPost && req.method === "POST") {
+          const decisionId = decodeURIComponent(receiptPost[1] ?? "");
+          let parsedBody: { receipt?: string; threadId?: string } = {};
+          try {
+            parsedBody = JSON.parse(rawBody || "{}") as { receipt?: string; threadId?: string };
+          } catch {
+            throw new StationError({
+              code: "invariant.unhandled",
+              message: "receipt body is not json",
+            });
+          }
+          await this.kit.postReceipt(decisionId, {
+            receipt: parsedBody.receipt ?? "",
+            threadId: parsedBody.threadId,
+          });
+          write(200, { ok: true });
           return;
         }
         const parkAction = path.match(/^\/park\/([^/]+)\/(approve|edit|kill)/);
@@ -1057,6 +1540,38 @@ export class Station implements StationApi {
             return;
           }
         }
+        if (path === "/workflows" && req.method === "GET") {
+          write(200, { items: this.workflows.list(), latest: this.workflows.latest() });
+          return;
+        }
+        if (path === "/workflows" && req.method === "POST") {
+          const body = JSON.parse(rawBody || "{}") as {
+            name?: string;
+            days?: number;
+            webhookUrl?: string;
+            everyMs?: number;
+          };
+          const saved = this.workflows.define({
+            id: randomUUID(),
+            name: body.name?.trim() || "Mail scan",
+            days: body.days && body.days > 0 ? body.days : 3,
+            webhookUrl: body.webhookUrl?.trim() ?? "",
+            everyMs: body.everyMs && body.everyMs > 0 ? body.everyMs : null,
+          });
+          write(200, saved);
+          return;
+        }
+        if (path === "/workflows/chat" && req.method === "POST") {
+          const body = JSON.parse(rawBody || "{}") as { text?: string };
+          const run = await this.workflows.runChat(body.text ?? "", {
+            mailboxes: this.gmailMailboxes(),
+            fetchImpl: fetch,
+            env: this.env,
+          });
+          this.parkWorkflowHits(run.needsAction);
+          write(200, run);
+          return;
+        }
         if (path.startsWith("/activity") && req.method === "GET") {
           write(200, { items: this.activityRows() });
           return;
@@ -1076,12 +1591,13 @@ export class Station implements StationApi {
           return;
         }
         if (path.startsWith("/packs") && req.method === "GET") {
-          write(200, { items: ["sales", "inbox-triage"], active: this.latestPackId });
+          write(200, { items: listPackIds(), active: this.latestPackId });
           return;
         }
         const activate = path.match(/^\/packs\/([^/]+)\/activate/);
         if (activate && req.method === "POST") {
           const packId = decodeURIComponent(activate[1] ?? "sales");
+          getPack(packId);
           await this.replay.rescore(
             [...this.decisions.values()].map((row) => row.signalId ?? row.id),
             packId,
@@ -1111,12 +1627,52 @@ export function getStation(opts?: { seed?: boolean }): StationApi {
   return new Station(opts);
 }
 
-function readRequestBody(req: Parameters<Parameters<typeof createServer>[0]>[0]): Promise<string> {
+function headerValue(
+  headers: Parameters<Parameters<typeof createServer>[0]>[0]["headers"],
+  name: string,
+): string {
+  const raw = headers[name];
+  return Array.isArray(raw) ? (raw[0] ?? "") : String(raw ?? "");
+}
+
+function readRequestBody(
+  req: Parameters<Parameters<typeof createServer>[0]>[0],
+  maxBytes: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(chunk as Buffer));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    let size = 0;
+    let settled = false;
+    const fail = (err: unknown) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(err);
+    };
+    req.on("data", (chunk) => {
+      const buf = chunk as Buffer;
+      size += buf.length;
+      if (size > maxBytes) {
+        fail(
+          new StationError({
+            code: "connections.invalid",
+            message: "request body too large",
+          }),
+        );
+        req.destroy();
+        return;
+      }
+      chunks.push(buf);
+    });
+    req.on("end", () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+    req.on("error", fail);
   });
 }
 

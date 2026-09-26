@@ -1,4 +1,5 @@
-import { AddSourcePanel } from "./AddSourcePanel.tsx";
+import { ConnectFlow } from "./ConnectFlow.tsx";
+import { needsYou, waitingCount } from "./park-action.ts";
 import { StationShell } from "./StationShell.tsx";
 import { itemsForConnection, mergeLiveConnections } from "./workspace.ts";
 import type { ChannelKind, Connection, ParkItem } from "./types.ts";
@@ -13,41 +14,40 @@ export function ChannelKindView({
   live?: Connection[];
 }) {
   const rows = mergeLiveConnections(live).filter((row) => row.kind === kind);
-  const waiting = items.filter((item) => item.state === "parked").length;
+  const waiting = waitingCount(items);
+  const title = kind === "email" ? "Email" : `${kind} connections`;
   return (
-    <StationShell title={`${kind}: connections`} waiting={waiting}>
+    <StationShell title={title} waiting={waiting}>
       <main className="work kind-layout">
         <div>
-          <p className="note">
-            Each row is its own tenant key. Open one to see incoming signals, parked work, and the log.
-          </p>
-          <ul className="channel-grid">
+          {kind === "email" && rows.length === 0 ? (
+            <p className="note">No mailboxes yet. Sign in with Google or paste IMAP.</p>
+          ) : (
+            <p className="note">
+              Each row is its own tenant key. Open one to see incoming signals, parked work, and the log.
+            </p>
+          )}
+          <ul className="source-roster">
             {rows.map((row) => {
-              const parked = itemsForConnection(items, kind, row.account).filter(
-                (item) => item.state === "parked",
-              ).length;
+              const parked = itemsForConnection(items, kind, row.account).filter(needsYou).length;
               return (
                 <li key={row.id}>
                   <a
-                    className={
-                      row.status === "needs_reauth" ? "channel-card needs-reauth" : "channel-card"
-                    }
+                    className={row.status === "needs_reauth" ? "needs-reauth" : undefined}
                     href={`/channels/${kind}/${encodeURIComponent(row.id)}`}
                   >
                     <strong>{row.label}</strong>
-                    <small>
-                      {row.status} · {parked} waiting
-                    </small>
-                    {row.status === "needs_reauth" ? (
-                      <small className="mute">Testing tokens die in 7 days.</small>
-                    ) : null}
+                    <span>
+                      {row.account} · {row.status} · {parked} waiting
+                      {row.status === "needs_reauth" ? " · Testing tokens die in 7 days." : ""}
+                    </span>
                   </a>
                 </li>
               );
             })}
           </ul>
         </div>
-        <AddSourcePanel kind={kind} />
+        <ConnectFlow kind={kind} />
       </main>
     </StationShell>
   );

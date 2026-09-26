@@ -93,6 +93,24 @@ describe("T25 boot producers", () => {
     }
   });
 
+  it("pasting a live mailbox after boot parks inbound without restart", async () => {
+    const runtime = await startWorker({
+      controlToken: "t25-after",
+      fixturePath: "fixtures/demo.jsonl",
+      env: { STATION_DATABASE_URL: "memory://t25-after", STATION_MASTER_KEY: MASTER },
+    });
+    try {
+      await pasteLive(runtime.workerPort, "t25-after", "afterboot@acme.com");
+      const park = await fetch(`http://127.0.0.1:${runtime.workerPort}/park`, {
+        headers: { authorization: "Bearer t25-after" },
+      });
+      const json = (await park.json()) as { items: Array<{ accountId?: string }> };
+      expect(json.items.some((row) => row.accountId === "afterboot@acme.com")).toBe(true);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it("scoring turn still cannot send", () => {
     expect(scoringTurnCallsCommitSend()).toBe(false);
   });

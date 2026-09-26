@@ -5,3 +5,7 @@ data/
 .DS_Store
 .cursor/
 .next/
+.next-t31/
+.next-build/
+.next-smoke/
+*.tsbuildinfo

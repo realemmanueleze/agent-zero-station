@@ -79,7 +79,7 @@ Levels:
 - `warn` — retryable failure
 - `error` — non-retryable or exhausted retry
 
-Redact always: OAuth tokens, `STATION_MASTER_KEY`, `STATION_CONTROL_TOKEN`, `STATION_COCKPIT_PASSWORD`, `Authorization` headers, raw mail bodies, pack SQL results that look like credentials.
+Redact always: OAuth tokens, `STATION_MASTER_KEY`, `STATION_CONTROL_TOKEN`, `STATION_COCKPIT_PASSWORD`, `NANGO_SECRET_KEY`, `NANGO_WEBHOOK_SECRET`, `Authorization` headers, raw mail bodies, pack SQL results that look like credentials.
 
 Do not log at `info` on every poll tick. Heartbeats are `debug`.
 
@@ -103,8 +103,11 @@ pnpm test          # implemented packages + ticket inventory (must stay green)
 pnpm test:tickets  # T1–T7 contracts; red until that ticket's program exists
 pnpm eval:recorded # merge-gate evals, no live model; red until those tickets land
 pnpm eval:live     # nightly, needs a model key
+pnpm smoke:compose # fixture park on 127.0.0.1:29173 (compose.smoke.yml)
 ```
 
 `pnpm test` is the T0 / inventory gate. It must not wait for T1–T7. Those suites live in `tests/tickets/` and `evals/suites/` so later tickets are written to pass already-committed assertions.
+
+Canonical go-path after T27: land or kill T28–T31 on `dev`, then T32 → T33 → T34 → T35 episodic → T37 fixture → T36 before Huffman traffic → T37 production → T39/T40. T32–T40 ticket folders exist; their `*.test.ts` files skip until that ticket’s red suite replaces the skip. Do not start T32 program code on a dirty T28–T31 tree.
 
 `getStation()` in `packages/station` is a stub that throws `invariant.not_implemented`. Ticket tests and evals call that API. Do not implement worker, schema, send, or Graph to make them pass until that ticket's failing suite is on the branch first. Replace one stub method at a time.

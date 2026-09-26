@@ -13,6 +13,9 @@ export default defineConfig({
       "@station/runtime": fileURLToPath(
         new URL("./packages/runtime/src/index.ts", import.meta.url),
       ),
+      "@station/packs/catalog": fileURLToPath(
+        new URL("./packages/packs/src/catalog.ts", import.meta.url),
+      ),
       "@station/packs": fileURLToPath(
         new URL("./packages/packs/src/index.ts", import.meta.url),
       ),
@@ -31,6 +34,7 @@ export default defineConfig({
     include: [
       "packages/**/*.test.ts",
       "apps/cockpit/**/*.test.ts",
+      "apps/cockpit/**/*.test.tsx",
       "tests/inventory.test.ts",
       "tests/tickets/**/*.test.ts",
     ],

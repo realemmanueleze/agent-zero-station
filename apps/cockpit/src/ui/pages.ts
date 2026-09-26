@@ -1,5 +1,5 @@
 import { listPackIds } from "@station/packs";
-import type { Mailbox } from "@station/channels";
+import type { Mailbox } from "./types.ts";
 
 export function renderAccountsHtml(mailboxes: Mailbox[], token = ""): string {
   const rows = mailboxes

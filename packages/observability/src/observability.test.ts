@@ -50,11 +50,13 @@ describe("logger", () => {
     });
     log.info("approve", {
       STATION_MASTER_KEY: "super-secret",
+      NANGO_SECRET_KEY: "nango-live-secret",
       authorization: "Bearer abc.def",
       body: "Quote for $12400 confidential",
     });
     const dumped = lines.join("\n");
     expect(dumped).not.toContain("super-secret");
+    expect(dumped).not.toContain("nango-live-secret");
     expect(dumped).not.toContain("abc.def");
     expect(dumped).not.toContain("12400");
     expect(dumped).toMatch(/\[REDACTED\]/);

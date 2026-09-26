@@ -1,5 +1,6 @@
 import { stationConfig } from "../lib/station-config.ts";
 import { defaultConnectors } from "./connectors.ts";
+import { ledgerSentence, needsYou } from "./park-action.ts";
 import type { ActivityEvent, ChannelKind, Connection, ParkItem } from "./types.ts";
 
 export const channelKinds: ChannelKind[] = ["email", "slack", "obsidian", "db", "mcp"];
@@ -54,6 +55,13 @@ export function connections(): Connection[] {
   return seedConnections();
 }
 
+export function sourceCaption(row: Connection): string {
+  if (/^[A-Z][A-Z0-9_]{2,}$/.test(row.account)) {
+    return row.label;
+  }
+  return row.account;
+}
+
 export function mergeLiveConnections(
   live: Array<{
     id: string;
@@ -63,9 +71,7 @@ export function mergeLiveConnections(
     status: Connection["status"];
   }>,
 ): Connection[] {
-  const hidden = new Set(live.map((row) => `${row.kind}|${row.account}`));
-  const remaining = seedConnections().filter((row) => !hidden.has(`${row.kind}|${row.account}`));
-  const liveRows: Connection[] = live.map((row) => ({
+  return live.map((row) => ({
     id: row.id,
     kind: row.kind,
     label: row.label,
@@ -73,7 +79,6 @@ export function mergeLiveConnections(
     detail: row.status,
     status: row.status,
   }));
-  return [...liveRows, ...remaining];
 }
 
 export function connectionsFor(kind: ChannelKind): Connection[] {
@@ -91,6 +96,22 @@ export function connectionsFor(kind: ChannelKind): Connection[] {
       detail: row.detail,
       status: row.status,
     }));
+}
+
+export function kindHasParkQueue(kind: ChannelKind): boolean {
+  switch (kind) {
+    case "email":
+    case "slack":
+      return true;
+    case "obsidian":
+    case "db":
+    case "mcp":
+      return false;
+    default: {
+      const _never: never = kind;
+      return Boolean(_never);
+    }
+  }
 }
 
 export function inferChannel(item: ParkItem): ChannelKind {
@@ -138,56 +159,10 @@ export function activityFromLedger(items: ParkItem[]): ActivityEvent[] {
     at: "2026-01-01T00:00:00Z",
     channel: inferChannel(item),
     account: inferAccount(item),
-    action: item.state,
+    action: ledgerSentence(item, items),
     signalId: item.id,
     detail: item.subject ?? item.body ?? item.id,
   }));
-}
-
-export function buildActivity(items: ParkItem[], opts?: { seeds?: boolean }): ActivityEvent[] {
-  const fromItems = activityFromLedger(items);
-  if (opts?.seeds === false) {
-    return fromItems;
-  }
-  const seed: ActivityEvent[] = [
-    {
-      id: "log-slack-1",
-      at: "2026-01-01T00:05:00Z",
-      channel: "slack",
-      account: "acme-hq",
-      action: "received",
-      signalId: "slack-1",
-      detail: "#inbound mentioned a quote follow-up",
-    },
-    {
-      id: "log-obsidian-1",
-      at: "2026-01-01T00:06:00Z",
-      channel: "obsidian",
-      account: "vault/acme",
-      action: "watched",
-      signalId: "vault-1",
-      detail: "notes/northwind.md changed",
-    },
-    {
-      id: "log-db-1",
-      at: "2026-01-01T00:07:00Z",
-      channel: "db",
-      account: "PACK_DATABASE_URL",
-      action: "queried",
-      signalId: "db-1",
-      detail: "packs/sales/queries/open-deals.sql",
-    },
-    {
-      id: "log-mcp-1",
-      at: "2026-01-01T00:08:00Z",
-      channel: "mcp",
-      account: "docs",
-      action: "tool",
-      signalId: "mcp-1",
-      detail: "search_docs northwind seats",
-    },
-  ];
-  return [...fromItems, ...seed].sort((a, b) => a.at.localeCompare(b.at));
 }
 
 export function queryWorkspace(
@@ -216,7 +191,7 @@ export function generateBrief(
   activity: ActivityEvent[],
   query = "",
 ): string {
-  const parked = items.filter((item) => item.state === "parked");
+  const parked = items.filter(needsYou);
   const sent = items.filter((item) => item.state === "sent");
   const byChannel = channelKinds
     .map((kind) => {

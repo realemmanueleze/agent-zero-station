@@ -1,11 +1,18 @@
 export type ProducedEmail = {
   account: string;
-  kind: "email";
+  kind: "email" | "slack";
   sendTo: string;
   from: string;
   subject: string;
   body: string;
+  providerMessageId?: string;
 };
+
+export function inboundDecisionId(msg: ProducedEmail): string {
+  return msg.providerMessageId
+    ? `prod-${msg.account}-${msg.providerMessageId}`
+    : `prod-${msg.account}-${Date.now()}`;
+}
 
 export function decisionFromInbound(input: {
   account: string;

@@ -1,5 +1,6 @@
 import { StationError } from "@station/observability";
 import { allowedOrigin, oauthOrigins } from "./oauth-google.ts";
+import { connectErrorLocation, oauthReturnPath } from "./oauth-return.ts";
 import { slackPkce } from "./pkce.ts";
 
 type VaultStore = {
@@ -29,6 +30,10 @@ function isTestRuntime(): boolean {
   return process.env.VITEST === "true" || process.env.NODE_ENV === "test";
 }
 
+function doorOf(url: URL): string {
+  return oauthReturnPath(url.searchParams.get("return"), "/channels/slack");
+}
+
 export async function handleSlackOAuth(opts: {
   path: string;
   method: string;
@@ -40,36 +45,58 @@ export async function handleSlackOAuth(opts: {
 }): Promise<boolean> {
   if (opts.path === "/oauth/slack/start" && opts.method === "GET") {
     assertOriginQuery(opts.url, opts.env);
+    const origin = allowedOrigin(opts.env);
+    const door = doorOf(opts.url);
     const clientId = opts.env.SLACK_OAUTH_CLIENT_ID ?? "";
     if (!clientId) {
-      throw new StationError({
-        code: "connections.invalid",
-        message: "SLACK_OAUTH_CLIENT_ID is required",
-      });
+      opts.redirect(302, connectErrorLocation(origin, door));
+      return true;
     }
-    const origin = allowedOrigin(opts.env);
-    const started = slackPkce.start();
-    const dest = new URL("https://slack.com/oauth/v2/authorize");
-    dest.searchParams.set("client_id", clientId);
-    dest.searchParams.set("state", started.state);
-    dest.searchParams.set("code_challenge", started.challenge);
-    dest.searchParams.set("code_challenge_method", "S256");
-    dest.searchParams.set("scope", "channels:read chat:write");
-    opts.redirect(302, `${dest.toString()}&redirect_uri=${origin}/oauth/slack/callback`);
+    try {
+      const started = slackPkce.start(door);
+      const dest = new URL("https://slack.com/oauth/v2/authorize");
+      dest.searchParams.set("client_id", clientId);
+      dest.searchParams.set("state", started.state);
+      dest.searchParams.set("code_challenge", started.challenge);
+      dest.searchParams.set("code_challenge_method", "S256");
+      dest.searchParams.set("scope", "channels:read chat:write");
+      opts.redirect(302, `${dest.toString()}&redirect_uri=${origin}/oauth/slack/callback`);
+    } catch {
+      opts.redirect(302, connectErrorLocation(origin, door));
+    }
     return true;
   }
   if (opts.path === "/oauth/slack/callback" && opts.method === "GET") {
-    const state = opts.url.searchParams.get("state") ?? "";
-    slackPkce.consume(state);
-    const account = isTestRuntime() ? "acme-live" : await exchangeSlack(opts.url.searchParams.get("code") ?? "", opts.env);
-    const created = opts.store.upsertEnvelope({
-      kind: "slack",
-      account,
-      label: account,
-      status: "live",
-      plaintext: JSON.stringify({ slackSecret: isTestRuntime() ? "oauth-stub" : "live" }),
-    });
-    opts.redirect(302, `${allowedOrigin(opts.env)}/channels/slack/${created.id}`);
+    const origin = allowedOrigin(opts.env);
+    let door = "/channels/slack";
+    try {
+      const consumed = slackPkce.consume(opts.url.searchParams.get("state") ?? "");
+      if (consumed.returnPath) {
+        door = oauthReturnPath(consumed.returnPath, "/channels/slack");
+      }
+    } catch {
+      opts.redirect(302, connectErrorLocation(origin, "/channels"));
+      return true;
+    }
+    const code = opts.url.searchParams.get("code") ?? "";
+    const providerError = opts.url.searchParams.get("error") ?? "";
+    if (providerError || !code) {
+      opts.redirect(302, connectErrorLocation(origin, door));
+      return true;
+    }
+    try {
+      const account = isTestRuntime() ? "acme-live" : await exchangeSlack(code, opts.env);
+      const created = opts.store.upsertEnvelope({
+        kind: "slack",
+        account,
+        label: account,
+        status: "live",
+        plaintext: JSON.stringify({ slackSecret: isTestRuntime() ? "oauth-stub" : "live" }),
+      });
+      opts.redirect(302, `${origin}/channels/slack/${created.id}`);
+    } catch {
+      opts.redirect(302, connectErrorLocation(origin, door));
+    }
     return true;
   }
   return false;

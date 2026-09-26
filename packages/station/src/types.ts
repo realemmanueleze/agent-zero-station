@@ -59,6 +59,7 @@ export type StationApi = {
       path: string;
       method?: string;
       headers?: Record<string, string>;
+      body?: string;
     }) => Promise<{ status: number; json: unknown; logs: string[] }>;
     claimSignal: (signalId: string, packId: string, workerId: string) => Promise<void>;
     startProducer: (producerRef: string, workerId: string) => Promise<{ started: boolean }>;
@@ -107,5 +108,61 @@ export type StationApi = {
     sendFromAuthFailure: (status: number) => Promise<never>;
     startWithoutGraphConfig: () => Promise<never>;
     approveOnce: () => Promise<{ providerCalls: number }>;
+  };
+  kit: {
+    parkInbound: (input: {
+      id: string;
+      tenantId: string;
+      mailboxId: string;
+      threadId: string;
+      body: string;
+      producerRef?: string;
+    }) => Promise<{ decisionId: string; runId: string; sendId: string }>;
+    outbox: (decisionId: string) => Promise<{
+      sendId: string;
+      runId: string;
+      decisionId: string;
+      state: "queued" | "sent" | "parked_failed" | "killed";
+      attempts: number;
+      receipt: string | null;
+    } | null>;
+    waits: (runId: string) => Promise<
+      Array<{
+        runId: string;
+        tenantId: string;
+        mailboxId: string;
+        threadId: string;
+        reason: "reply" | "timer";
+        wakeAt: string | null;
+        state: "open" | "dead" | "resumed";
+      }>
+    >;
+    bootScan: () => Promise<{ warned: string[]; completed: string[] }>;
+    postReceipt: (
+      decisionId: string,
+      input: { receipt: string; threadId?: string },
+    ) => Promise<void>;
+    readContext: (tenantId: string) => Promise<Array<{ id: string; body: string }>>;
+    writeContext: (input: { id: string; tenantId: string; body: string }) => Promise<void>;
+    armCrash: (decisionId: string, point: "before-receipt") => Promise<void>;
+    armProviderFailure: (decisionId: string) => Promise<void>;
+    armProviderThread: (decisionId: string, threadId: string) => Promise<void>;
+    resumeReply: (input: {
+      mailboxId: string;
+      threadId: string;
+      body: string;
+    }) => Promise<{ runId: string; decisionId: string }>;
+    settleInFlight: (
+      decisionId: string,
+      input: { receipt: string; threadId?: string },
+    ) => Promise<void>;
+    insertTimer: (input: {
+      runId: string;
+      tenantId: string;
+      mailboxId: string;
+      threadId: string;
+      wakeAt: string;
+    }) => Promise<void>;
+    wakeDueTimers: (now: string) => Promise<{ decisionId: string; runId: string }>;
   };
 };

@@ -20,12 +20,13 @@ export function dispatchCommand(id: string): boolean {
 }
 
 export const commandActions: CommandAction[] = [
-  { id: "approve", label: "Approve send", hint: "A", group: "hitl" },
+  { id: "approve", label: "Approve", hint: "A", group: "hitl" },
   { id: "edit", label: "Edit draft", hint: "E", group: "hitl" },
   { id: "kill", label: "Kill", hint: "K", group: "hitl" },
   { id: "pack", label: "Switch pack", hint: "P", group: "nav" },
   { id: "channels", label: "Open channels", hint: "C", group: "nav" },
   { id: "activity", label: "Open activity", hint: "Y", group: "nav" },
   { id: "brief", label: "Open brief", hint: "B", group: "nav" },
+  { id: "workflows", label: "Open workflows", hint: "W", group: "nav" },
   { id: "theme", label: "Toggle theme", hint: "T", group: "theme" },
 ];

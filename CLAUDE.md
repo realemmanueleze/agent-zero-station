@@ -6,7 +6,7 @@ Read [docs/ENGINEERING.md](docs/ENGINEERING.md) before writing feature code.
 
 - Tests and evals are written first. Program code exists to turn those red suites green.
 - Throw only `StationError`. Log only through `@station/observability`. Redact secrets and mail bodies.
-- Ticket order: T0 observability (done as the shared layer) → T1 schema → T2 worker → T3 send → T4 cockpit → T5 config → T6 replay → T7 Graph.
+- Ticket order: T0 observability (done as the shared layer) → T1 schema → T2 worker → T3 send → T4 cockpit → T5 config → T6 replay → T7 Graph. After T27: land or kill T28–T31 on `dev`, then T32 command API → T33 Deep Agents wrap + dial → T34/T35 episodic → T37 fixture → T36 meter → T37 production → T39/T40. T3 send-once (200 replay, one provider call) must survive T32. Model tools never include `commit_send`.
 
 ## Skill routing
 

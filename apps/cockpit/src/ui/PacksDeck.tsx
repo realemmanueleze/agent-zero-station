@@ -1,41 +1,65 @@
 "use client";
 
 import { useState } from "react";
-import { listPackIds, type PackId } from "@station/packs";
+import { listPackIds, type PackId } from "@station/packs/catalog";
+import { ScreenState } from "./ScreenState.tsx";
 import { StationShell } from "./StationShell.tsx";
 
-export function PacksDeck() {
-  const [active, setActive] = useState<PackId>("sales");
+function isPackId(value: string): value is PackId {
+  return (listPackIds() as string[]).includes(value);
+}
+
+export function PacksDeck({ initialActive, waiting = 0 }: { initialActive: PackId; waiting?: number }) {
+  const [active, setActive] = useState<PackId>(initialActive);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function activate(id: PackId) {
-    const res = await fetch(`/packs/${id}/activate`, { method: "POST" });
-    const json = (await res.json()) as { packId?: string; error?: { code?: string } };
-    if (json.error?.code) {
-      setNotice(json.error.code);
-      return;
+    setError(null);
+    try {
+      const res = await fetch(`/packs/${id}/activate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      const json = (await res.json()) as { packId?: string; error?: { code?: string } };
+      if (!res.ok || json.error?.code || !json.packId || !isPackId(json.packId)) {
+        setError(json.error?.code ?? "pack.activate_failed");
+        return;
+      }
+      setActive(json.packId);
+      setNotice(`Active pack is ${json.packId}. Replay the same signals.`);
+    } catch {
+      setError("pack.activate_failed");
     }
-    setActive((json.packId as PackId) ?? id);
-    setNotice(`Active pack is ${json.packId ?? id}. Replay the same signals.`);
   }
 
   return (
-    <StationShell title="Packs: switch the scoring brain">
-      <main className="work">
-        <p className="note">Active: {active}</p>
-        <div className="packs">
+    <StationShell title="Switch the scoring brain" waiting={waiting}>
+      <main className="work stack">
+        <p className="note">Active: {active}. Replay the same signals after you switch.</p>
+        <ul className="source-roster">
           {listPackIds().map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={id === active ? "pack on" : "pack"}
-              onClick={() => void activate(id)}
-            >
-              pack: {id}
-            </button>
+            <li key={id}>
+              <button
+                type="button"
+                data-pack={id}
+                className={id === active ? "on" : undefined}
+                onClick={() => void activate(id)}
+              >
+                <strong>{id}</strong>
+                <span>
+                  {id === "sales"
+                    ? "Deal size, closer, park over $10k."
+                    : "Route inbound. Park when the ask is unclear."}
+                </span>
+              </button>
+            </li>
           ))}
-        </div>
-        {notice ? <p className="toast">{notice}</p> : null}
+        </ul>
+        {error ? <ScreenState status="error" title={error} /> : null}
+        {notice ? (
+          <ScreenState status="ready" title={notice} />
+        ) : null}
       </main>
     </StationShell>
   );

@@ -1,0 +1,41 @@
+name: station-fixture-smoke
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: station
+      POSTGRES_PASSWORD: station
+      POSTGRES_DB: station
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U station"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  packdb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pack
+      POSTGRES_PASSWORD: pack
+      POSTGRES_DB: pack
+
+  station:
+    build: .
+    ports:
+      - "127.0.0.1:29173:19173"
+    environment:
+      STATION_DATABASE_URL: postgres://station:station@postgres:5432/station
+      PACK_DATABASE_URL: postgres://pack:pack@packdb:5432/pack
+      STATION_MASTER_KEY: local-dev-master-key-32-bytes!!!!
+      STATION_CONTROL_TOKEN: dev-control-token
+      STATION_COCKPIT_HOST: "0.0.0.0"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_DIST_DIR: ".next-smoke"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      packdb:
+        condition: service_started
+    volumes:
+      - ./fixtures:/app/fixtures

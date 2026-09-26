@@ -20,6 +20,8 @@ import {
   type Envelope,
 } from "./envelope.ts";
 import { imapLoginOnly, imapSearchUnseen } from "./imap-probe.ts";
+import { handleNangoRequest, type NangoFetch } from "./nango.ts";
+import { parseNangoEnvelope, pollNangoAccount, sendNangoDraft } from "./nango-runtime.ts";
 import { handleGoogleOAuth } from "./oauth-google.ts";
 import { handleSlackOAuth } from "./oauth-slack.ts";
 import { stationConfig } from "./station-config.ts";
@@ -85,8 +87,21 @@ function isTestRuntime(): boolean {
 
 export class ConnectionStore {
   private readonly local = new Map<string, ConnectionRow>();
+  private nangoFetch?: NangoFetch;
 
   constructor(private readonly env: () => Record<string, string | undefined>) {}
+
+  readEnv(): Record<string, string | undefined> {
+    return this.env();
+  }
+
+  setNangoFetch(fetchImpl?: NangoFetch): void {
+    this.nangoFetch = fetchImpl;
+  }
+
+  nangoFetchImpl(): NangoFetch | undefined {
+    return this.nangoFetch;
+  }
 
   private get rows(): Map<string, ConnectionRow> {
     return getSharedLedger(this.env().STATION_DATABASE_URL)?.connections ?? this.local;
@@ -283,31 +298,42 @@ export class ConnectionStore {
     row.status = status;
   }
 
-  async pollAccount(account: string): Promise<ProducedEmail[]> {
+  async pollAccount(account: string, kind: ConnectionKind = "email"): Promise<ProducedEmail[]> {
     if (account.startsWith("boom@")) {
       throw new StationError({
         code: "connections.invalid",
         message: "producer boom",
       });
     }
-    const row = this.find("email", account);
+    const row = this.find(kind, account);
     if (!row || row.status === "deleted") {
       return [];
     }
-    const fields = JSON.parse(this.decryptRow(row)) as {
-      imapHost?: string;
-      imapPort?: number;
-      imapUser?: string;
-      imapSecret?: string;
-    };
+    const fields = JSON.parse(this.decryptRow(row)) as Record<string, unknown>;
+    const envelope = parseNangoEnvelope(fields);
+    if (envelope && (kind === "email" || kind === "slack")) {
+      if (isTestRuntime() && !this.nangoFetch) {
+        return kind === "email" ? [fixtureInbound(account)] : [];
+      }
+      return pollNangoAccount({
+        kind,
+        account,
+        envelope,
+        env: this.env(),
+        fetchImpl: this.nangoFetch,
+      });
+    }
+    if (kind !== "email") {
+      return [];
+    }
     if (isTestRuntime()) {
       return [fixtureInbound(account)];
     }
     return imapSearchUnseen({
-      host: fields.imapHost ?? "",
-      port: fields.imapPort ?? 993,
-      user: fields.imapUser ?? account,
-      pass: fields.imapSecret ?? "",
+      host: String(fields.imapHost ?? ""),
+      port: Number(fields.imapPort ?? 993),
+      user: String(fields.imapUser ?? account),
+      pass: String(fields.imapSecret ?? ""),
     });
   }
 
@@ -461,11 +487,15 @@ export function useEmailConnection(store: ConnectionStore, account: string): Ema
   });
 }
 
+function liveRowFor(store: ConnectionStore, account: string) {
+  return store.find("email", account) ?? store.find("slack", account);
+}
+
 export function shouldUseLiveMailbox(account: string | undefined, store: ConnectionStore): boolean {
   if (!account) {
     return false;
   }
-  const live = store.find("email", account);
+  const live = liveRowFor(store, account);
   if (live?.status === "live") {
     return true;
   }
@@ -482,7 +512,7 @@ export async function approveWithConnection(
   if (!input.account || !shouldUseLiveMailbox(input.account, store)) {
     return;
   }
-  const row = store.find("email", input.account);
+  const row = liveRowFor(store, input.account);
   if (row?.status === "needs_reauth") {
     throw new StationError({
       code: "connections.needs_reauth",
@@ -495,12 +525,34 @@ export async function approveWithConnection(
       message: "connection gone",
     });
   }
+  const fields = JSON.parse(store.decryptRow(row)) as Record<string, unknown>;
+  const envelope = parseNangoEnvelope(fields);
+  if (envelope && (row.kind === "email" || row.kind === "slack")) {
+    await sendNangoDraft({
+      kind: row.kind,
+      to: input.sendTo ?? input.account,
+      body: input.body,
+      envelope,
+      env: store.readEnv(),
+      fetchImpl: store.nangoFetchImpl(),
+    });
+    return;
+  }
+  if (row.kind !== "email") {
+    throw new StationError({
+      code: "connections.invalid",
+      message: "slack send needs nango",
+    });
+  }
   const transport = useEmailConnection(store, input.account);
   await commitSend({ to: input.sendTo ?? input.account, body: input.body }, transport);
 }
 
 async function pingConnection(kind: ConnectionKind, plaintext: string): Promise<void> {
   const fields = JSON.parse(plaintext) as Record<string, unknown>;
+  if (parseNangoEnvelope(fields)) {
+    return;
+  }
   switch (kind) {
     case "email":
       await imapLoginOnly({
@@ -613,8 +665,9 @@ export async function handleVaultRequest(opts: {
   env: Record<string, string | undefined>;
   write: (status: number, body: unknown) => void;
   redirect: (status: number, location: string) => void;
+  headers?: Record<string, string | undefined>;
 }): Promise<boolean> {
-  if (await handleGoogleOAuth(opts) || await handleSlackOAuth(opts)) {
+  if (await handleNangoRequest(opts) || await handleGoogleOAuth(opts) || await handleSlackOAuth(opts)) {
     return true;
   }
   if (opts.path === "/connections/rotate-keys" && opts.method === "POST") {

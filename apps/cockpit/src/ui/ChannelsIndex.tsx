@@ -1,26 +1,35 @@
+import { ConnectFlow } from "./ConnectFlow.tsx";
+import { waitingCount } from "./park-action.ts";
 import { StationShell } from "./StationShell.tsx";
-import { channelKinds, connectionsFor } from "./workspace.ts";
-import type { ParkItem } from "./types.ts";
+import { channelKinds, mergeLiveConnections, sourceCaption } from "./workspace.ts";
+import type { Connection, ParkItem } from "./types.ts";
 
-export function ChannelsIndex({ items }: { items: ParkItem[] }) {
-  const waiting = items.filter((item) => item.state === "parked").length;
+export function ChannelsIndex({ items, live = [] }: { items: ParkItem[]; live?: Connection[] }) {
+  const waiting = waitingCount(items);
+  const sources = mergeLiveConnections(live);
   return (
-    <StationShell title="Channels: every signal source" waiting={waiting}>
-      <main className="work">
-        <ul className="channel-grid">
-          {channelKinds.map((kind) => {
-            const rows = connectionsFor(kind);
-            return (
-              <li key={kind}>
-                <a className="channel-card" href={`/channels/${kind}`}>
-                  <strong>{kind}</strong>
-                  <small>{rows.length === 1 ? "1 connection" : `${rows.length} connections`}</small>
-                  <span>{rows.map((row) => row.account).join(" · ") || "none"}</span>
-                </a>
-              </li>
-            );
-          })}
-        </ul>
+    <StationShell title="Every signal source" waiting={waiting}>
+      <main className="work kind-layout">
+        <div>
+          <p className="note">Add a source, or open a kind. Each account is isolated.</p>
+          <ul className="source-roster">
+            {channelKinds.map((kind) => {
+              const rows = sources.filter((row) => row.kind === kind);
+              return (
+                <li key={kind}>
+                  <a href={`/channels/${kind}`}>
+                    <strong>{kind}</strong>
+                    <span>
+                      {rows.length === 1 ? "1 connection" : `${rows.length} connections`}
+                      {rows.length ? ` · ${rows.map((row) => sourceCaption(row)).join(" · ")}` : ""}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+        <ConnectFlow />
       </main>
     </StationShell>
   );

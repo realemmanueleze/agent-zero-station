@@ -8,16 +8,10 @@ Load order:
 
 Override only CSS variables:
 
-`--bg` `--ink` `--line` `--mute` `--park-border` `--park-fill` `--ok` `--danger` `--sans` `--mono`
+`--bg` `--bg-spot` `--surface` `--surface-2` `--ink` `--line` `--line-strong` `--mute` `--park-border` `--park-fill` `--ok` `--danger` `--sans` `--mono` `--radius` `--shadow`
 
-Pack themes may change accent. They must not hide Approve, Edit, or Kill.
+Pack themes may change accent. They must not hide Approve, Edit, or Kill. T32 deletes pack HTML card renderers; restyle with tokens only.
 
-Toggle high contrast from the cockpit command palette (`Toggle theme`) or set `document.documentElement.dataset.theme = "high-contrast"`.
+Theme follows the operator’s computer (`prefers-color-scheme`) unless they pick Light, Dark, or High contrast. The Theme control and command palette (`Toggle theme`) cycle `system → light → dark → high-contrast`. Persist with `localStorage.station-theme`. Set `document.documentElement.dataset.theme` to override. `prefers-reduced-motion` removes park-card motion. Screen states use `.screen-state.is-loading|is-error|is-empty|is-ready`.
 
-Register a custom parked-card renderer:
-
-```ts
-import { registerParkRenderer } from "./src/ui/registry.ts";
-
-registerParkRenderer("sales", (item) => `<article>${item.subject}</article>`);
-```
+Do not register a custom parked-card HTML renderer. T32 removes `registerParkRenderer`. Recolor `--park-border` / `--park-fill` instead.

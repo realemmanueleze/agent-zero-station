@@ -12,6 +12,8 @@ export function ParkSlot({
   onSaveEdit,
   onCancelEdit,
   onKill,
+  busy,
+  reply,
 }: {
   item: ParkItem;
   editing?: boolean;
@@ -22,6 +24,8 @@ export function ParkSlot({
   onSaveEdit?: (id: string) => void;
   onCancelEdit?: () => void;
   onKill?: (id: string) => void;
+  busy?: boolean;
+  reply?: boolean;
 }) {
   const renderer = getParkRenderer(item.packId ?? "sales");
   if (renderer !== renderParkCardHtml) {
@@ -38,6 +42,8 @@ export function ParkSlot({
       onSaveEdit={onSaveEdit}
       onCancelEdit={onCancelEdit}
       onKill={onKill}
+      busy={busy}
+      reply={reply}
     />
   );
 }

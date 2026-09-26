@@ -12,7 +12,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const path = fixture === "recorded" ? packId : fixture;
-  const pack = fixture === "recorded" ? process.argv[5] : packId;
+  const pack = fixture === "recorded" ? process.argv[6] : packId;
   const station = getStation({ seed: false });
   const rows = await station.replay.replayCompare(path ?? "fixtures/sales-week.jsonl", pack ?? "sales");
   process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);

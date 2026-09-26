@@ -12,13 +12,20 @@ export const errorCodes = {
   "lease.held": { status: 409, retryable: false },
   "schema.migrate_failed": { status: 500, retryable: false },
   "send.already_sent": { status: 409, retryable: false },
+  "send.already_attempted": { status: 409, retryable: false },
+  "send.in_flight": { status: 409, retryable: false },
+  "send.killed": { status: 409, retryable: false },
   "send.provider_failed": { status: 502, retryable: true },
+  "run.wait_conflict": { status: 409, retryable: false },
   "connections.invalid": { status: 400, retryable: false },
   "connections.encrypt_failed": { status: 500, retryable: false },
   "connections.decrypt_failed": { status: 500, retryable: false },
   "connections.missing": { status: 404, retryable: false },
   "connections.needs_reauth": { status: 409, retryable: false },
+  "connections.nango_failed": { status: 502, retryable: true },
   "auth.oauth_state": { status: 400, retryable: false },
+  "pack.unknown": { status: 400, retryable: false },
+  "policy.denied": { status: 403, retryable: false },
 } as const;
 
 export type ErrorCode = keyof typeof errorCodes;

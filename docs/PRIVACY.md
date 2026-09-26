@@ -6,7 +6,7 @@ Agent Zero Station is a kit you clone and host. There is no hosted SaaS and no s
 
 - Mailbox tokens and pasted secrets sit in your ledger, encrypted with `STATION_MASTER_KEY` that you set.
 - Parked drafts stay on your worker. Approve is the only send.
-- Logs redact OAuth tokens, the master key, control tokens, and raw mail bodies.
+- Logs redact OAuth tokens, the master key, control tokens, cockpit password, Nango secrets, and raw mail bodies.
 
 ## What this repo does not do
 

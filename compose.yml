@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:16
+    ports:
+      - "127.0.0.1:5435:5432"
     environment:
       POSTGRES_USER: station
       POSTGRES_PASSWORD: station
@@ -25,7 +27,7 @@ services:
   station:
     build: .
     ports:
-      - "19173:19173"
+      - "127.0.0.1:19173:19173"
     environment:
       STATION_DATABASE_URL: postgres://station:station@postgres:5432/station
       PACK_DATABASE_URL: postgres://pack:pack@packdb:5432/pack

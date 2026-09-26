@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@langchain/langgraph": "^1.0.0",
     "@station/observability": "workspace:*",
     "@station/packs": "workspace:*"
   }
