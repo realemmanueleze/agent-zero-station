@@ -154,15 +154,55 @@ export function itemsForConnection(items: ParkItem[], kind: ChannelKind, account
 }
 
 export function activityFromLedger(items: ParkItem[]): ActivityEvent[] {
-  return items.map((item) => ({
-    id: `decision-${item.id}`,
-    at: "2026-01-01T00:00:00Z",
-    channel: inferChannel(item),
-    account: inferAccount(item),
-    action: ledgerSentence(item, items),
-    signalId: item.id,
-    detail: item.subject ?? item.body ?? item.id,
-  }));
+  const rows: ActivityEvent[] = [];
+  for (const item of items) {
+    const sentence = ledgerSentence(item, items);
+    const phases = runPhases(item, sentence);
+    if (phases.length === 0) {
+      rows.push({
+        id: `decision-${item.id}`,
+        at: "2026-01-01T00:00:00Z",
+        channel: inferChannel(item),
+        account: inferAccount(item),
+        action: sentence,
+        signalId: item.id,
+        detail: item.subject ?? item.body ?? item.id,
+      });
+      continue;
+    }
+    for (const phase of phases) {
+      rows.push({
+        id: `decision-${item.id}-${phase.phase}`,
+        at: "2026-01-01T00:00:00Z",
+        channel: inferChannel(item),
+        account: inferAccount(item),
+        action: phase.sentence,
+        signalId: item.id,
+        detail: item.subject ?? item.body ?? item.id,
+        phase: phase.phase,
+      });
+    }
+  }
+  return rows;
+}
+
+function runPhases(item: ParkItem, sentence: string): Array<{ phase: string; sentence: string }> {
+  if (!item.runId) {
+    return [];
+  }
+  if (item.state === "parked") {
+    return [
+      { phase: "drafted", sentence },
+      { phase: "waiting for Approve", sentence },
+    ];
+  }
+  if (item.state === "sent") {
+    return [
+      { phase: "sent", sentence },
+      { phase: "waiting for reply", sentence },
+    ];
+  }
+  return [];
 }
 
 export function queryWorkspace(

@@ -8,7 +8,7 @@ export function renderActivityHtml(events: ActivityEvent[]): string {
   const rows = events
     .map(
       (row) =>
-        `<li data-activity="${row.id}"><strong>${row.channel} · ${row.account}</strong><span>${sentenceForState(row.action)}: ${row.detail}</span></li>`,
+        `<li data-activity="${row.id}"><strong>${row.channel} · ${row.account}</strong><span>${row.phase ? `${row.phase}: ` : ""}${sentenceForState(row.action)}: ${row.detail}</span></li>`,
     )
     .join("");
   return `<ul class="inbox">${rows}</ul>`;
@@ -46,6 +46,7 @@ export function ActivityView({
                   {row.channel} · {row.account}
                 </strong>
                 <span>
+                  {row.phase ? `${row.phase}: ` : ""}
                   {sentenceForState(row.action)}: {row.detail}
                 </span>
                 {row.at ? <em>{row.at}</em> : null}
