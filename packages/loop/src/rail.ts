@@ -74,6 +74,7 @@ export type RailPause = {
   sentCount: number;
   from: string;
   subject: string;
+  goalStage: string;
   trace: string[];
 };
 
@@ -96,8 +97,19 @@ function asPause(runId: string, result: GraphResult): RailPause {
     sentCount: result.sentCount ?? 0,
     from: result.from ?? "",
     subject: result.subject ?? "",
+    goalStage: result.goalStage ?? "intro",
     trace: result.trace ?? [],
   };
+}
+
+function goalStageFor(text: string): "booked" | "objection" | "reply" {
+  if (/book/i.test(text)) {
+    return "booked";
+  }
+  if (/objection|not interested|too expensive|no thanks/i.test(text)) {
+    return "objection";
+  }
+  return "reply";
 }
 
 export class RailEngine {
@@ -175,6 +187,37 @@ export class RailEngine {
           trace: ["draft_follow_up"],
         };
       })
+      .addNode("triage_reply", (state) => {
+        const goalStage = goalStageFor(state.reply);
+        return { goalStage, phase: goalStage, trace: ["triage_reply"] };
+      })
+      .addNode("update_goal_stage", (state) => ({
+        goalStage: state.goalStage,
+        trace: ["update_goal_stage"],
+      }))
+      .addNode("process_transcript", () => ({
+        trace: ["process_transcript"],
+      }))
+      .addNode("next_best_actions", (state) => {
+        const pack = getPack("pack-unseen-engine");
+        const signal = { text: state.reply, subject: "Next step", from: state.from };
+        return {
+          draft: pack.draft(signal, pack.score(signal)),
+          approval: "pending" as const,
+          phase: "review",
+          trace: ["next_best_actions"],
+        };
+      })
+      .addNode("draft_objection", (state) => {
+        const pack = getPack("pack-unseen-engine");
+        const signal = { text: state.reply, subject: "Objection", from: state.from };
+        return {
+          draft: `${pack.draft(signal, pack.score(signal))}\n${state.reply}`,
+          approval: "pending" as const,
+          phase: "review",
+          trace: ["draft_objection"],
+        };
+      })
       .addNode("draft_response", (state) => {
         const pack = getPack("pack-unseen-engine");
         const signal = { text: state.reply, subject: "Reply", from: state.from };
@@ -195,11 +238,20 @@ export class RailEngine {
       })
       .addEdge("send_email", "wait_for_reply")
       .addConditionalEdges("wait_for_reply", (state) => {
-        if (state.phase === "triage") return "draft_response";
+        if (state.phase === "triage") return "triage_reply";
         if (state.phase === "follow_up") return "draft_follow_up";
         if (state.phase === "done") return END;
         return "wait_for_reply";
       })
+      .addEdge("triage_reply", "update_goal_stage")
+      .addConditionalEdges("update_goal_stage", (state) => {
+        if (state.goalStage === "booked") return "process_transcript";
+        if (state.goalStage === "objection") return "draft_objection";
+        return "draft_response";
+      })
+      .addEdge("process_transcript", "next_best_actions")
+      .addEdge("next_best_actions", "human_review")
+      .addEdge("draft_objection", "human_review")
       .addEdge("draft_follow_up", "human_review")
       .addEdge("draft_response", "human_review")
       .compile({ checkpointer: this.checkpointer });

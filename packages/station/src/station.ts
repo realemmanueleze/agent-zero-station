@@ -778,6 +778,7 @@ export class Station implements StationApi {
             accountId: row.account ?? stationConfig.email[0]?.id,
             killPhase: row.killPhase ?? null,
             phase: snap?.phase ?? null,
+            goalStage: snap?.goalStage ?? null,
             trace: snap?.trace ?? [],
           };
         }),
