@@ -90,6 +90,10 @@ export function tickWord(sentence: string): "Parked" | "Sending" | "Sent" | "Kil
   return "quiet";
 }
 
+export function spendSentence(spent: number, budget: number): string {
+  return `$${spent} of $${budget}`;
+}
+
 export function killPhaseFor(state: string): ParkItem["killPhase"] {
   if (state === "sending") {
     return "inflight";

@@ -327,6 +327,7 @@ describe("T31 desk behavior", () => {
 
     render(
       <ActionDeck
+        spend={{ spent: 42, budget: 100 }}
         items={[
           { ...parked, id: "sent-1", state: "sent", runId: "run-1", subject: "Sent slip" },
           { ...parked, id: "reply-1", state: "parked", runId: "run-1", subject: "Reply slip" },
@@ -337,6 +338,9 @@ describe("T31 desk behavior", () => {
     expect(screen.getByText("Sent. Reply is parked.")).toBeTruthy();
     expect(screen.getByText("Parked.")).toBeTruthy();
     expect(document.querySelector('.desk-ticks a[href="/activity"] b')?.textContent).toBe("Sent");
+    expect(document.querySelectorAll('.desk-ticks a[href="/activity"] b')[1]?.textContent).toBe(
+      "$42 of $100",
+    );
     expect(screen.getByText("waiting for Approve")).toBeTruthy();
     expect(screen.getByText("nothing sends until you do")).toBeTruthy();
     expect(document.querySelector(".desk-hero strong")?.textContent).toBe("1");

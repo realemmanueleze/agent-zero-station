@@ -27,6 +27,8 @@ export const errorCodes = {
   "pack.unknown": { status: 400, retryable: false },
   "transcript.unlabeled": { status: 400, retryable: false },
   "policy.denied": { status: 403, retryable: false },
+  "spend.unknown_model": { status: 400, retryable: false },
+  "spend.blocked": { status: 409, retryable: false },
 } as const;
 
 export type ErrorCode = keyof typeof errorCodes;
