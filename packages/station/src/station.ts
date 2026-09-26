@@ -1057,22 +1057,11 @@ export class Station implements StationApi {
           message: "no timer is due",
         });
       }
-      const decisionId = `timer-${randomUUID()}`;
-      const sendId = `send-${decisionId}`;
-      this.decisions.set(decisionId, {
-        id: decisionId,
-        sendId,
-        state: "parked",
-        body: "timer draft",
-        tenantId: first.tenantId,
-        packId: "sales",
-        runId: first.runId,
-        mailboxId: first.mailboxId,
-        threadId: first.threadId,
-        killed: false,
-      });
-      this.sendIds.add(sendId);
-      return { decisionId, runId: first.runId };
+      const parked = await this.parkFollowUp(first);
+      for (const row of due.slice(1)) {
+        await this.parkFollowUp(row);
+      }
+      return { decisionId: parked.decisionId, runId: first.runId };
     },
   };
 
@@ -1081,7 +1070,44 @@ export class Station implements StationApi {
     return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
   }
 
+  private async parkFollowUp(first: {
+    runId: string;
+    tenantId: string;
+    mailboxId: string;
+    threadId: string;
+  }): Promise<{ decisionId: string; runId: string }> {
+    const decisionId = `timer-${randomUUID()}`;
+    const sendId = `send-${decisionId}`;
+    let body = "timer draft";
+    if (this.rail.has(first.runId) && (await this.rail.phase(first.runId)) === "wait_for_reply") {
+      const pause = await this.rail.resume(first.runId, { kind: "follow_up" });
+      body = pause.draft;
+    }
+    this.decisions.set(decisionId, {
+      id: decisionId,
+      sendId,
+      state: "parked",
+      body,
+      tenantId: first.tenantId,
+      packId: "sales",
+      runId: first.runId,
+      mailboxId: first.mailboxId,
+      threadId: first.threadId,
+      killed: false,
+    });
+    this.sendIds.add(sendId);
+    return { decisionId, runId: first.runId };
+  }
+
+  private async wakeDueQuiet(now: string): Promise<void> {
+    const due = this.kitLedger.takeDue(now);
+    for (const row of due) {
+      await this.parkFollowUp(row);
+    }
+  }
+
   private async pollProducer(producerRef: string): Promise<void> {
+    await this.wakeDueQuiet(new Date().toISOString());
     const email = producerRef.startsWith("email:");
     const slack = producerRef.startsWith("slack:");
     if (!email && !slack) {

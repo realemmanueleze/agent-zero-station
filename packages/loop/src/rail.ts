@@ -157,10 +157,23 @@ export class RailEngine {
         if ("kind" in event && event.kind === "reply") {
           return { reply: event.text, phase: "triage", trace: ["wait_for_reply"] };
         }
+        if ("kind" in event && event.kind === "follow_up") {
+          return { phase: "follow_up", trace: ["wait_for_reply"] };
+        }
         if ("action" in event && event.action === "kill") {
           return { phase: "done", trace: ["wait_for_reply"] };
         }
         return { phase: "waiting", trace: ["wait_for_reply"] };
+      })
+      .addNode("draft_follow_up", (state) => {
+        const pack = getPack("pack-unseen-engine");
+        const signal = { text: "No reply yet.", subject: state.subject || "Follow up", from: state.from };
+        return {
+          draft: pack.draft(signal, pack.score(signal)),
+          approval: "pending" as const,
+          phase: "review",
+          trace: ["draft_follow_up"],
+        };
       })
       .addNode("draft_response", (state) => {
         const pack = getPack("pack-unseen-engine");
@@ -183,9 +196,11 @@ export class RailEngine {
       .addEdge("send_email", "wait_for_reply")
       .addConditionalEdges("wait_for_reply", (state) => {
         if (state.phase === "triage") return "draft_response";
+        if (state.phase === "follow_up") return "draft_follow_up";
         if (state.phase === "done") return END;
         return "wait_for_reply";
       })
+      .addEdge("draft_follow_up", "human_review")
       .addEdge("draft_response", "human_review")
       .compile({ checkpointer: this.checkpointer });
     this.graph = graph;
