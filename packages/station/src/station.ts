@@ -1198,15 +1198,61 @@ export class Station implements StationApi {
     detail: string;
     channel: string;
     killPhase?: "unsent" | "inflight" | "sent";
+    phase?: string;
+    sentence?: string;
   }> {
-    return [...this.decisions.values()].map((row) => ({
-      id: `decision-${row.id}`,
-      action: row.state,
-      killPhase: row.killPhase,
-      account: row.account ?? row.tenantId,
-      detail: row.subject ?? row.body ?? row.id,
-      channel: row.kind ?? "email",
-    }));
+    const rows: Array<{
+      id: string;
+      action: string;
+      account: string;
+      detail: string;
+      channel: string;
+      killPhase?: "unsent" | "inflight" | "sent";
+      phase?: string;
+      sentence?: string;
+    }> = [];
+    for (const row of this.decisions.values()) {
+      const base = {
+        action: row.state,
+        killPhase: row.killPhase,
+        account: row.account ?? row.tenantId,
+        detail: row.subject ?? row.body ?? row.id,
+        channel: row.kind ?? "email",
+      };
+      const phases = this.runPhases(row);
+      if (phases.length === 0) {
+        rows.push({ id: `decision-${row.id}`, ...base });
+        continue;
+      }
+      for (const phase of phases) {
+        rows.push({
+          id: `decision-${row.id}-${phase.phase}`,
+          ...base,
+          phase: phase.phase,
+          sentence: phase.sentence,
+        });
+      }
+    }
+    return rows;
+  }
+
+  private runPhases(row: Decision): Array<{ phase: string; sentence: string }> {
+    if (!row.runId) {
+      return [];
+    }
+    if (row.state === "parked") {
+      return [
+        { phase: "drafted", sentence: "Parked." },
+        { phase: "waiting for Approve", sentence: "Parked." },
+      ];
+    }
+    if (row.state === "sent") {
+      return [
+        { phase: "sent", sentence: "Sent. Watching for a reply." },
+        { phase: "waiting for reply", sentence: "Sent. Watching for a reply." },
+      ];
+    }
+    return [];
   }
 
   private briefText(query: string): string {

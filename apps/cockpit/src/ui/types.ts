@@ -43,6 +43,7 @@ export type ActivityEvent = {
   action: string;
   signalId: string;
   detail: string;
+  phase?: string;
 };
 
 export type LoopStep = {

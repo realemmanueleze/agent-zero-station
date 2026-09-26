@@ -140,6 +140,8 @@ export function mapWorkerActivity(
     at?: string;
     signalId?: string;
     killPhase?: "unsent" | "inflight" | "sent";
+    phase?: string;
+    sentence?: string;
   }>,
 ): ActivityEvent[] {
   return rows.map((row) => ({
@@ -147,9 +149,10 @@ export function mapWorkerActivity(
     at: row.at ?? "",
     channel: (row.channel as ChannelKind) ?? "email",
     account: row.account ?? "",
-    action: sentenceForState(row.action ?? "", row.killPhase),
+    action: row.sentence ?? sentenceForState(row.action ?? "", row.killPhase),
     signalId: row.signalId ?? row.id ?? "",
     detail: row.detail ?? "",
+    phase: row.phase,
   }));
 }
 
