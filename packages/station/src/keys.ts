@@ -30,6 +30,7 @@ export const CONFIG_READ_KEYS = [
   "NANGO_INTEGRATION_EMAIL",
   "NANGO_INTEGRATION_SLACK",
   "NANGO_INTEGRATION_DRIVE",
+  "LANGSMITH_API_KEY",
 ] as const;
 
 export type ConfigKey = (typeof CONFIG_READ_KEYS)[number];

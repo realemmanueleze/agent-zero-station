@@ -23,6 +23,7 @@ export type LedgerDecision = {
   killed?: boolean;
   killPhase?: "unsent" | "inflight" | "sent";
   recordId?: string;
+  traceRun?: { id: string; url: string };
 };
 
 export type LedgerSignal = {

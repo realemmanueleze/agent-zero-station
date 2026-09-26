@@ -14,6 +14,7 @@ export type ParkItem = {
   accountId?: string;
   runId?: string | null;
   killPhase?: "unsent" | "inflight" | "sent";
+  traceUrl?: string;
 };
 
 export type Connector = {

@@ -63,6 +63,7 @@ type Decision = {
   killed?: boolean;
   killPhase?: "unsent" | "inflight" | "sent";
   recordId?: string;
+  traceRun?: { id: string; url: string };
 };
 
 type Signal = {
@@ -782,6 +783,9 @@ export class Station implements StationApi {
             phase: snap?.phase ?? null,
             goalStage: snap?.goalStage ?? null,
             trace: snap?.trace ?? [],
+            ...(row.traceRun
+              ? { traceUrl: row.traceRun.url, traceRun: { id: row.traceRun.id, url: row.traceRun.url } }
+              : {}),
           };
         }),
       );
@@ -949,6 +953,16 @@ export class Station implements StationApi {
         recordId: input.recordId,
       });
       this.sendIds.add(sendId);
+      const key = this.env.LANGSMITH_API_KEY?.trim();
+      if (key) {
+        const saved = this.decisions.get(input.id);
+        if (saved) {
+          saved.traceRun = {
+            id: keptRun,
+            url: `https://smith.langchain.com/r/${keptRun}`,
+          };
+        }
+      }
       return { decisionId: input.id, runId: keptRun, sendId };
     },
     outbox: async (decisionId) => {
