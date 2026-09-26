@@ -32,7 +32,7 @@ export function scoringTurnCallsCommitSend(): boolean {
 }
 
 export { RailEngine } from "./rail.ts";
-export type { RailPause, RailStart, RailStore } from "./rail.ts";
+export type { DrafterSlot, RailPause, RailStart, RailStore } from "./rail.ts";
 
 export function runScoringTurn(packId: string, signal: PackSignal): ScoringTurn {
   const pack = getPack(packId);

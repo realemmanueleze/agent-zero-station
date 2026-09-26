@@ -114,6 +114,8 @@ function goalStageFor(text: string): "booked" | "objection" | "reply" {
   return "reply";
 }
 
+export type DrafterSlot = { model?: object };
+
 export class RailEngine {
   readonly checkpointer: LedgerCheckpointer;
   private readonly graph;
@@ -124,6 +126,7 @@ export class RailEngine {
       send: (state: { draft: string; threadId: string }) => void | Promise<void>;
       store?: RailStore;
       model?: BaseLanguageModel;
+      modelSlot?: DrafterSlot;
       draft?: (
         node: "draft_outreach" | "draft_response" | "next_best_actions",
         state: { thread: string; reply: string; from: string; subject: string },
@@ -142,8 +145,9 @@ export class RailEngine {
       if (this.opts.draft) {
         return this.opts.draft(node, state);
       }
-      if (this.opts.model) {
-        return draftWithAgent({ node, text, model: this.opts.model });
+      const model = (this.opts.modelSlot?.model ?? this.opts.model) as BaseLanguageModel | undefined;
+      if (model) {
+        return draftWithAgent({ node, text, model });
       }
       const pack = getPack("pack-unseen-engine");
       const signal = { text, subject: state.subject, from: state.from };
