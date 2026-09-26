@@ -117,6 +117,7 @@ export type StationApi = {
       threadId: string;
       body: string;
       producerRef?: string;
+      recordId?: string;
     }) => Promise<{ decisionId: string; runId: string; sendId: string }>;
     outbox: (decisionId: string) => Promise<{
       sendId: string;
@@ -125,6 +126,7 @@ export type StationApi = {
       state: "queued" | "sent" | "parked_failed" | "killed";
       attempts: number;
       receipt: string | null;
+      recordId: string | null;
     } | null>;
     waits: (runId: string) => Promise<
       Array<{
@@ -143,6 +145,8 @@ export type StationApi = {
       input: { receipt: string; threadId?: string },
     ) => Promise<void>;
     readContext: (tenantId: string) => Promise<Array<{ id: string; body: string; kind: string; actor: string }>>;
+    linkage: (decisionId: string) => Promise<{ recordId: string; tenantId: string }>;
+    fewShot: (input: { tenantId: string; recordId: string }) => Promise<string[]>;
     writeContext: (input: {
       id: string;
       tenantId: string;

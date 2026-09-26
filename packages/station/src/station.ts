@@ -62,6 +62,7 @@ type Decision = {
   producerRef?: string;
   killed?: boolean;
   killPhase?: "unsent" | "inflight" | "sent";
+  recordId?: string;
 };
 
 type Signal = {
@@ -922,11 +923,22 @@ export class Station implements StationApi {
       });
       const onRail = pause.runId === runId;
       const keptRun = onRail ? pause.runId : runId;
+      const prior = input.recordId
+        ? [...this.decisions.values()]
+            .filter(
+              (row) =>
+                row.state === "sent" &&
+                row.tenantId === input.tenantId &&
+                row.recordId === input.recordId,
+            )
+            .map((row) => row.body)
+        : [];
+      const draft = onRail ? pause.draft : input.body;
       this.decisions.set(input.id, {
         id: input.id,
         sendId,
         state: "parked",
-        body: onRail ? pause.draft : input.body,
+        body: prior.length > 0 ? `${draft}\n${prior.join("\n")}` : draft,
         tenantId: input.tenantId,
         packId: "sales",
         runId: keptRun,
@@ -934,6 +946,7 @@ export class Station implements StationApi {
         threadId: input.threadId,
         producerRef: input.producerRef,
         killed: false,
+        recordId: input.recordId,
       });
       this.sendIds.add(sendId);
       return { decisionId: input.id, runId: keptRun, sendId };
@@ -950,6 +963,7 @@ export class Station implements StationApi {
         state: row.state,
         attempts: row.attempts,
         receipt: row.receipt,
+        recordId: row.recordId,
       };
     },
     waits: async (runId) => this.kitLedger.waitsFor(runId),
@@ -983,6 +997,19 @@ export class Station implements StationApi {
       await this.persistLedger();
     },
     readContext: async (tenantId) => this.kitLedger.readRecords(tenantId),
+    linkage: async (decisionId) => {
+      const row = this.requireDecision(decisionId);
+      return { recordId: row.recordId ?? "", tenantId: row.tenantId };
+    },
+    fewShot: async (input) =>
+      [...this.decisions.values()]
+        .filter(
+          (row) =>
+            row.state === "sent" &&
+            row.tenantId === input.tenantId &&
+            row.recordId === input.recordId,
+        )
+        .map((row) => row.body),
     writeContext: async (input) => {
       const kind = input.kind;
       if (kind !== "lead" && kind !== "traveler" && kind !== "job" && kind !== "client") {
@@ -1389,6 +1416,7 @@ export class Station implements StationApi {
       mailboxId: row.mailboxId ?? "",
       threadId: row.threadId ?? "",
       killed: row.killed === true,
+      recordId: row.recordId,
     };
   }
 

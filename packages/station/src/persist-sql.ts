@@ -73,7 +73,7 @@ export async function hydrateLedgerFromSql(url: string, ledger: SharedLedger): P
       });
     }
     const decisions = await client.query(
-      "SELECT id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase FROM decisions",
+      "SELECT id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase, record_id FROM decisions",
     );
     for (const row of decisions.rows) {
       const id = String(row.id);
@@ -95,11 +95,12 @@ export async function hydrateLedgerFromSql(url: string, ledger: SharedLedger): P
         producerRef: row.producer_ref ? String(row.producer_ref) : undefined,
         killed: row.killed === true,
         killPhase: row.kill_phase ? (String(row.kill_phase) as LedgerDecision["killPhase"]) : undefined,
+        recordId: row.record_id ? String(row.record_id) : undefined,
       });
       ledger.sendIds.add(sendId);
     }
     const outbox = await client.query(
-      "SELECT send_id, run_id, decision_id, state, attempts, receipt, provider_thread_id FROM outbox",
+      "SELECT send_id, run_id, decision_id, state, attempts, receipt, provider_thread_id, record_id FROM outbox",
     );
     for (const row of outbox.rows) {
       const sendId = String(row.send_id);
@@ -111,6 +112,7 @@ export async function hydrateLedgerFromSql(url: string, ledger: SharedLedger): P
         attempts: Number(row.attempts ?? 0),
         receipt: row.receipt ? String(row.receipt) : null,
         providerThreadId: row.provider_thread_id ? String(row.provider_thread_id) : null,
+        recordId: row.record_id ? String(row.record_id) : null,
       });
     }
     const waits = await client.query(
@@ -193,8 +195,8 @@ export async function flushLedgerToSql(url: string, ledger: SharedLedger): Promi
     }
     for (const row of ledger.decisions.values()) {
       await client.query(
-        `INSERT INTO decisions (id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        `INSERT INTO decisions (id, signal_id, pack_id, send_id, state, body, tenant_id, account, kind, send_to, run_id, mailbox_id, thread_id, producer_ref, killed, kill_phase, record_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT (id) DO UPDATE SET
            state = EXCLUDED.state,
            body = EXCLUDED.body,
@@ -207,7 +209,8 @@ export async function flushLedgerToSql(url: string, ledger: SharedLedger): Promi
            thread_id = EXCLUDED.thread_id,
            producer_ref = EXCLUDED.producer_ref,
            killed = EXCLUDED.killed,
-           kill_phase = EXCLUDED.kill_phase`,
+           kill_phase = EXCLUDED.kill_phase,
+           record_id = EXCLUDED.record_id`,
         [
           row.id,
           row.signalId ?? null,
@@ -225,6 +228,7 @@ export async function flushLedgerToSql(url: string, ledger: SharedLedger): Promi
           row.producerRef ?? null,
           row.killed === true,
           row.killPhase ?? null,
+          row.recordId ?? null,
         ],
       );
     }
@@ -239,8 +243,8 @@ async function replaceKit(
   await client.query("DELETE FROM outbox");
   for (const row of ledger.outbox.values()) {
     await client.query(
-      `INSERT INTO outbox (send_id, run_id, decision_id, state, attempts, receipt, provider_thread_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      `INSERT INTO outbox (send_id, run_id, decision_id, state, attempts, receipt, provider_thread_id, record_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [
         row.sendId,
         row.runId,
@@ -249,6 +253,7 @@ async function replaceKit(
         row.attempts,
         row.receipt,
         row.providerThreadId,
+        row.recordId,
       ],
     );
   }
