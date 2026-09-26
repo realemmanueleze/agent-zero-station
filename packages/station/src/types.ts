@@ -147,6 +147,7 @@ export type StationApi = {
     readContext: (tenantId: string) => Promise<Array<{ id: string; body: string; kind: string; actor: string }>>;
     linkage: (decisionId: string) => Promise<{ recordId: string; tenantId: string }>;
     fewShot: (input: { tenantId: string; recordId: string }) => Promise<string[]>;
+    armDrafter: (model: object) => Promise<void>;
     writeContext: (input: {
       id: string;
       tenantId: string;

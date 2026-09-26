@@ -159,7 +159,8 @@ export class Station implements StationApi {
   private readonly kitLedger = new KitLedger();
   private readonly workflows = new WorkflowDesk();
   private railDelivery: ((state: { draft: string; threadId: string }) => Promise<void>) | null = null;
-  private readonly rail = createStationRail((state) => this.deliverRailSend(state));
+  private readonly drafter: { model?: object } = {};
+  private readonly rail = createStationRail((state) => this.deliverRailSend(state), this.drafter);
   private workflowTimer: ReturnType<typeof setInterval> | null = null;
   private lastTraces: LiveToolTrace[] = [];
 
@@ -1024,6 +1025,9 @@ export class Station implements StationApi {
             row.recordId === input.recordId,
         )
         .map((row) => row.body),
+    armDrafter: async (model) => {
+      this.drafter.model = model;
+    },
     writeContext: async (input) => {
       const kind = input.kind;
       if (kind !== "lead" && kind !== "traveler" && kind !== "job" && kind !== "client") {
