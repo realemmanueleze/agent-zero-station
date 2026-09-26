@@ -22,6 +22,7 @@ export type LedgerDecision = {
   producerRef?: string;
   killed?: boolean;
   killPhase?: "unsent" | "inflight" | "sent";
+  recordId?: string;
 };
 
 export type LedgerSignal = {

@@ -11,6 +11,7 @@ export type KitOutbox = {
   attempts: number;
   receipt: string | null;
   providerThreadId: string | null;
+  recordId: string | null;
 };
 
 export type KitWait = {
@@ -40,6 +41,7 @@ export type KitDecisionRef = {
   mailboxId: string;
   threadId: string;
   killed: boolean;
+  recordId?: string;
 };
 
 export class KitLedger {
@@ -116,6 +118,7 @@ export class KitLedger {
       attempts: 0,
       receipt: null,
       providerThreadId: null,
+      recordId: input.recordId ?? null,
     });
   }
 

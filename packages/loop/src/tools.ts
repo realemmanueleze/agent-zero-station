@@ -55,16 +55,27 @@ export function winnerState(label: WinnerLabel): "parked" | "dropped" | "escalat
 
 export function buildLivePrompt(input: {
   tenantId: string;
+  recordId?: string;
   signal: PackSignal;
   ledgerHits: Array<{ tenantId: string; text: string }>;
+  examples?: Array<{ tenantId: string; recordId: string; text: string }>;
 }): string {
   const hits = input.ledgerHits.filter((row) => row.tenantId === input.tenantId);
-  return [
+  const examples = (input.examples ?? []).filter(
+    (row) =>
+      row.tenantId === input.tenantId &&
+      (input.recordId === undefined || row.recordId === input.recordId),
+  );
+  const lines = [
     `tenant=${input.tenantId}`,
     `from=${input.signal.from ?? ""}`,
     `text=${input.signal.text ?? input.signal.subject ?? ""}`,
     `ledger=${hits.map((row) => row.text).join("\n")}`,
-  ].join("\n");
+  ];
+  if (input.examples) {
+    lines.push(`examples=${examples.map((row) => row.text).join("\n")}`);
+  }
+  return lines.join("\n");
 }
 
 export type LiveToolTrace = {
