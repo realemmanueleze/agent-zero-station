@@ -31,6 +31,9 @@ export function scoringTurnCallsCommitSend(): boolean {
   return liveToolsIncludeCommitSend();
 }
 
+export { RailEngine } from "./rail.ts";
+export type { RailPause, RailStart, RailStore } from "./rail.ts";
+
 export function runScoringTurn(packId: string, signal: PackSignal): ScoringTurn {
   const pack = getPack(packId);
   const scores = pack.score(signal);

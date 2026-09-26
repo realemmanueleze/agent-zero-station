@@ -2,12 +2,12 @@ import {
   Annotation,
   Command,
   END,
-  MemorySaver,
   START,
   StateGraph,
   interrupt,
 } from "@langchain/langgraph";
 import { getPack } from "@station/packs";
+import { LedgerCheckpointer, type DaCheckpoint } from "./ledger-checkpointer.ts";
 
 export type HumanDecision =
   | { action: "approve" }
@@ -33,6 +33,9 @@ type RailChannels = {
   sentCount: number;
   reply: string;
   phase: string;
+  from: string;
+  subject: string;
+  trace: string[];
 };
 
 const RailState = Annotation.Root({
@@ -46,6 +49,12 @@ const RailState = Annotation.Root({
   sentCount: Annotation<number>({ reducer: (_left, right) => right, default: () => 0 }),
   reply: Annotation<string>({ reducer: (_left, right) => right, default: () => "" }),
   phase: Annotation<string>({ reducer: (_left, right) => right, default: () => "draft" }),
+  from: Annotation<string>({ reducer: (_left, right) => right, default: () => "" }),
+  subject: Annotation<string>({ reducer: (_left, right) => right, default: () => "" }),
+  trace: Annotation<string[]>({
+    reducer: (left, right) => [...left, ...right],
+    default: () => [],
+  }),
 });
 
 export type RailStart = {
@@ -53,6 +62,8 @@ export type RailStart = {
   mailboxId: string;
   threadId: string;
   thread: string;
+  from?: string;
+  subject?: string;
   goalStage?: string;
 };
 
@@ -61,6 +72,14 @@ export type RailPause = {
   phase: "human_review" | "wait_for_reply" | "done";
   draft: string;
   sentCount: number;
+  from: string;
+  subject: string;
+  trace: string[];
+};
+
+export type RailStore = {
+  checkpoints: DaCheckpoint[];
+  opens: Map<string, string>;
 };
 
 type GraphResult = RailChannels & {
@@ -75,36 +94,59 @@ function asPause(runId: string, result: GraphResult): RailPause {
     phase,
     draft: hit?.draft ?? result.draft ?? "",
     sentCount: result.sentCount ?? 0,
+    from: result.from ?? "",
+    subject: result.subject ?? "",
+    trace: result.trace ?? [],
   };
 }
 
 export class RailEngine {
+  readonly checkpointer: LedgerCheckpointer;
   private readonly graph;
+  private readonly opens: Map<string, string>;
 
-  constructor(private readonly opts: { send: (state: { draft: string; threadId: string }) => void }) {
+  constructor(
+    private readonly opts: {
+      send: (state: { draft: string; threadId: string }) => void;
+      store?: RailStore;
+    },
+  ) {
+    const store = opts.store ?? { checkpoints: [], opens: new Map() };
+    this.opens = store.opens;
+    this.checkpointer = new LedgerCheckpointer(store.checkpoints);
     const send = this.opts.send;
     const graph = new StateGraph(RailState)
+      .addNode("enrich_lead", (state) => ({
+        from: state.from,
+        subject: state.subject,
+        trace: ["enrich_lead"],
+      }))
       .addNode("draft_outreach", (state) => {
         const pack = getPack("pack-unseen-engine");
-        const signal = { text: state.thread, subject: "Intro", from: "lead@unseen.test" };
-        return { draft: pack.draft(signal, pack.score(signal)), approval: "pending" as const, phase: "review" };
+        const signal = { text: state.thread, subject: state.subject, from: state.from };
+        return {
+          draft: pack.draft(signal, pack.score(signal)),
+          approval: "pending" as const,
+          phase: "review",
+          trace: ["draft_outreach"],
+        };
       })
       .addNode("human_review", (state) => {
         const decision = interrupt({ kind: "human_review", draft: state.draft }) as HumanDecision;
         if (decision.action === "edit") {
-          return { draft: decision.body, approval: "pending" as const, phase: "review" };
+          return { draft: decision.body, approval: "pending" as const, phase: "review", trace: ["human_review"] };
         }
         if (decision.action === "kill") {
-          return { approval: "killed" as const, phase: "done" };
+          return { approval: "killed" as const, phase: "done", trace: ["human_review"] };
         }
-        return { approval: "approved" as const, phase: "send" };
+        return { approval: "approved" as const, phase: "send", trace: ["human_review"] };
       })
       .addNode("send_email", (state) => {
         if (state.approval !== "approved") {
-          return { phase: "done" };
+          return { phase: "done", trace: ["send_email"] };
         }
         send({ draft: state.draft, threadId: state.threadId });
-        return { sentCount: state.sentCount + 1, phase: "waiting" };
+        return { sentCount: state.sentCount + 1, phase: "waiting", trace: ["send_email"] };
       })
       .addNode("wait_for_reply", (state) => {
         const event = interrupt({
@@ -113,23 +155,25 @@ export class RailEngine {
           threadId: state.threadId,
         }) as WaitEvent;
         if ("kind" in event && event.kind === "reply") {
-          return { reply: event.text, phase: "triage" };
+          return { reply: event.text, phase: "triage", trace: ["wait_for_reply"] };
         }
         if ("action" in event && event.action === "kill") {
-          return { phase: "done" };
+          return { phase: "done", trace: ["wait_for_reply"] };
         }
-        return { phase: "waiting" };
+        return { phase: "waiting", trace: ["wait_for_reply"] };
       })
       .addNode("draft_response", (state) => {
         const pack = getPack("pack-unseen-engine");
-        const signal = { text: state.reply, subject: "Reply", from: "lead@unseen.test" };
+        const signal = { text: state.reply, subject: "Reply", from: state.from };
         return {
           draft: `${pack.draft(signal, pack.score(signal))}\n${state.reply}`,
           approval: "pending" as const,
           phase: "review",
+          trace: ["draft_response"],
         };
       })
-      .addEdge(START, "draft_outreach")
+      .addEdge(START, "enrich_lead")
+      .addEdge("enrich_lead", "draft_outreach")
       .addEdge("draft_outreach", "human_review")
       .addConditionalEdges("human_review", (state) => {
         if (state.approval === "killed") return END;
@@ -143,21 +187,29 @@ export class RailEngine {
         return "wait_for_reply";
       })
       .addEdge("draft_response", "human_review")
-      .compile({ checkpointer: new MemorySaver() });
+      .compile({ checkpointer: this.checkpointer });
     this.graph = graph;
   }
 
   async start(input: RailStart): Promise<RailPause> {
+    const openKey = `${input.mailboxId}\0${input.threadId}`;
+    const existing = this.opens.get(openKey);
+    if (existing) {
+      return this.pauseFor(existing);
+    }
     const result = (await this.graph.invoke(
       {
         runId: input.runId,
         mailboxId: input.mailboxId,
         threadId: input.threadId,
         thread: input.thread,
+        from: input.from ?? "",
+        subject: input.subject ?? "",
         goalStage: input.goalStage ?? "intro",
       },
       { configurable: { thread_id: input.runId } },
     )) as GraphResult;
+    this.opens.set(openKey, input.runId);
     return asPause(input.runId, result);
   }
 
@@ -166,5 +218,13 @@ export class RailEngine {
       configurable: { thread_id: runId },
     })) as GraphResult;
     return asPause(runId, result);
+  }
+
+  private async pauseFor(runId: string): Promise<RailPause> {
+    const snap = await this.graph.getState({ configurable: { thread_id: runId } });
+    const values = snap.values as GraphResult;
+    const tasks = snap.tasks as Array<{ interrupts?: Array<{ value?: { kind?: string; draft?: string } }> }>;
+    const hit = tasks.flatMap((task) => task.interrupts ?? [])[0]?.value;
+    return asPause(runId, { ...values, __interrupt__: hit ? [{ value: hit }] : undefined });
   }
 }

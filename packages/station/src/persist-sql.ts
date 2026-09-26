@@ -141,6 +141,17 @@ export async function hydrateLedgerFromSql(url: string, ledger: SharedLedger): P
   });
 }
 
+export function daCheckpointQuery(row: { id: string; checkpoint: unknown }): {
+  text: string;
+  values: [string, string];
+} {
+  return {
+    text: `INSERT INTO da_checkpoints (id, checkpoint) VALUES ($1, $2::jsonb)
+      ON CONFLICT (id) DO UPDATE SET checkpoint = EXCLUDED.checkpoint`,
+    values: [row.id, JSON.stringify(row.checkpoint)],
+  };
+}
+
 export async function flushLedgerToSql(url: string, ledger: SharedLedger): Promise<void> {
   if (!shouldApplyLedgerSql(url)) {
     return;
@@ -250,5 +261,9 @@ async function replaceKit(
       row.tenantId,
       row.body,
     ]);
+  }
+  for (const row of ledger.daCheckpoints ?? []) {
+    const query = daCheckpointQuery(row);
+    await client.query(query.text, query.values);
   }
 }

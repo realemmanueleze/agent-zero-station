@@ -46,6 +46,7 @@ export type SharedLedger = {
   outbox: Map<string, KitOutbox>;
   waits: KitWait[];
   records: KitRecord[];
+  daCheckpoints?: Array<{ id: string; checkpoint: unknown }>;
 };
 
 const ledgers = new Map<string, SharedLedger>();

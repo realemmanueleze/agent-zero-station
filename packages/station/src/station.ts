@@ -29,6 +29,7 @@ import { getSharedLedger } from "./ledger.ts";
 import { flushLedgerToSql, hydrateLedgerFromSql } from "./persist-sql.ts";
 import { applyLedgerMigration } from "./postgres.ts";
 import { KitLedger, type KitDecisionRef } from "./kit-ledger.ts";
+import { createStationRail } from "./rail-host.ts";
 import type {
   EmailPayload,
   ParkItem,
@@ -154,6 +155,7 @@ export class Station implements StationApi {
   private readonly connectionStore = new ConnectionStore(() => this.env);
   private readonly kitLedger = new KitLedger();
   private readonly workflows = new WorkflowDesk();
+  private readonly rail = createStationRail();
   private workflowTimer: ReturnType<typeof setInterval> | null = null;
   private lastTraces: LiveToolTrace[] = [];
 
@@ -1183,6 +1185,7 @@ export class Station implements StationApi {
     if (!url || !shared) {
       return;
     }
+    shared.daCheckpoints = this.rail.checkpointer.table;
     await flushLedgerToSql(url, shared);
   }
 
