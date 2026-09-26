@@ -758,25 +758,29 @@ export class Station implements StationApi {
         };
       }
       const items = await Promise.all(
-        [...this.decisions.values()].map(async (row) => ({
-          id: row.id,
-          state: row.state,
-          actions: this.parkActions(row),
-          runId: row.runId ?? null,
-          wait: this.waitView(row),
-          outbox: this.outboxView(row),
-          tenantId: row.tenantId,
-          packId: row.packId,
-          body: row.body,
-          from: row.from,
-          subject: row.subject,
-          amount: row.amount,
-          rationale: row.rationale,
-          channel: (row.kind ?? "email") as "email",
-          accountId: row.account ?? stationConfig.email[0]?.id,
-          killPhase: row.killPhase ?? null,
-          phase: row.runId && this.rail.has(row.runId) ? await this.rail.phase(row.runId) : null,
-        })),
+        [...this.decisions.values()].map(async (row) => {
+          const snap = row.runId && this.rail.has(row.runId) ? await this.rail.snapshot(row.runId) : null;
+          return {
+            id: row.id,
+            state: row.state,
+            actions: this.parkActions(row),
+            runId: row.runId ?? null,
+            wait: this.waitView(row),
+            outbox: this.outboxView(row),
+            tenantId: row.tenantId,
+            packId: row.packId,
+            body: row.body,
+            from: row.from,
+            subject: row.subject,
+            amount: row.amount,
+            rationale: row.rationale,
+            channel: (row.kind ?? "email") as "email",
+            accountId: row.account ?? stationConfig.email[0]?.id,
+            killPhase: row.killPhase ?? null,
+            phase: snap?.phase ?? null,
+            trace: snap?.trace ?? [],
+          };
+        }),
       );
       return { status: 200, json: { items } };
     },
@@ -999,11 +1003,16 @@ export class Station implements StationApi {
       }
       const decisionId = `reply-${randomUUID()}`;
       const sendId = `send-${decisionId}`;
+      let body = input.body;
+      if (this.rail.has(wait.runId)) {
+        const pause = await this.rail.resume(wait.runId, { kind: "reply", text: input.body });
+        body = pause.draft;
+      }
       this.decisions.set(decisionId, {
         id: decisionId,
         sendId,
         state: "parked",
-        body: input.body,
+        body,
         tenantId: wait.tenantId,
         packId: "sales",
         runId: wait.runId,
@@ -1476,6 +1485,30 @@ export class Station implements StationApi {
     return { sendId: row.sendId, providerMessageId: receipt };
   }
 
+  private async ingestForm(input: {
+    tenantId: string;
+    mailboxId: string;
+    threadId: string;
+    body: string;
+  }): Promise<{ runId: string; decisionId: string }> {
+    if (this.kitLedger.findOpenReply(input.mailboxId, input.threadId)) {
+      return this.kit.resumeReply(input);
+    }
+    const existing = this.rail.openRun(input.mailboxId, input.threadId);
+    if (existing) {
+      const row = [...this.decisions.values()].find((item) => item.runId === existing);
+      return { runId: existing, decisionId: row?.id ?? existing };
+    }
+    const parked = await this.kit.parkInbound({
+      id: `form-${randomUUID()}`,
+      tenantId: input.tenantId,
+      mailboxId: input.mailboxId,
+      threadId: input.threadId,
+      body: input.body,
+    });
+    return { runId: parked.runId, decisionId: parked.decisionId };
+  }
+
   private async callProvider(sendId: string, force: boolean): Promise<void> {
     const current = this.providerCalls.get(sendId) ?? 0;
     if (!force && current > 0) {
@@ -1630,6 +1663,22 @@ export class Station implements StationApi {
         if (path.startsWith("/brief") && req.method === "GET") {
           const query = parsed.searchParams.get("q") ?? "";
           write(200, { brief: this.briefText(query) });
+          return;
+        }
+        if (path === "/form" && req.method === "POST") {
+          const body = JSON.parse(rawBody || "{}") as {
+            tenantId?: string;
+            mailboxId?: string;
+            threadId?: string;
+            body?: string;
+          };
+          const saved = await this.ingestForm({
+            tenantId: body.tenantId ?? "tenant-a",
+            mailboxId: body.mailboxId ?? "",
+            threadId: body.threadId ?? "",
+            body: body.body ?? "",
+          });
+          write(200, saved);
           return;
         }
         if (path.startsWith("/park")) {

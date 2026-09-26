@@ -241,14 +241,20 @@ export class KitLedger {
     return { warned, completed };
   }
 
-  resume(mailboxId: string, threadId: string): KitWait | null {
-    const wait = this.waits.find(
-      (row) =>
-        row.state === "open" &&
-        row.reason === "reply" &&
-        row.mailboxId === mailboxId &&
-        row.threadId === threadId,
+  findOpenReply(mailboxId: string, threadId: string): KitWait | null {
+    return (
+      this.waits.find(
+        (row) =>
+          row.state === "open" &&
+          row.reason === "reply" &&
+          row.mailboxId === mailboxId &&
+          row.threadId === threadId,
+      ) ?? null
     );
+  }
+
+  resume(mailboxId: string, threadId: string): KitWait | null {
+    const wait = this.findOpenReply(mailboxId, threadId);
     if (!wait) {
       return null;
     }
