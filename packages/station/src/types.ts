@@ -144,16 +144,37 @@ export type StationApi = {
       decisionId: string,
       input: { receipt: string; threadId?: string },
     ) => Promise<void>;
-    readContext: (tenantId: string) => Promise<Array<{ id: string; body: string; kind: string; actor: string }>>;
+    readContext: (tenantId: string) => Promise<
+      Array<{ id: string; body: string; kind: string; actor: string; label?: string }>
+    >;
     linkage: (decisionId: string) => Promise<{ recordId: string; tenantId: string }>;
     fewShot: (input: { tenantId: string; recordId: string }) => Promise<string[]>;
     armDrafter: (model: object) => Promise<void>;
+    ingestTranscript: (input: {
+      id: string;
+      tenantId: string;
+      actor: string;
+      label?: string;
+      body: string;
+      mailboxId: string;
+      threadId: string;
+    }) => Promise<{ decisionId: string; runId: string }>;
+    parkOpenWork: (input: {
+      id: string;
+      tenantId: string;
+      actor: string;
+      excerpt: string;
+      email: string;
+      mailboxId: string;
+      threadId: string;
+    }) => Promise<{ decisionId: string; runId: string }>;
     writeContext: (input: {
       id: string;
       tenantId: string;
       body: string;
       kind: "lead" | "traveler" | "job" | "client";
       actor: string;
+      label?: "lead" | "discovery" | "delivery";
     }) => Promise<void>;
     armCrash: (decisionId: string, point: "before-receipt") => Promise<void>;
     armProviderFailure: (decisionId: string) => Promise<void>;

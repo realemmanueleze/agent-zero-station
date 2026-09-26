@@ -31,6 +31,7 @@ export type KitRecord = {
   body: string;
   kind: "lead" | "traveler" | "job" | "client";
   actor: string;
+  label?: "lead" | "discovery" | "delivery";
 };
 
 export type KitDecisionRef = {

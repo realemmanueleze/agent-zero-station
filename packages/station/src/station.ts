@@ -1028,6 +1028,60 @@ export class Station implements StationApi {
     armDrafter: async (model) => {
       this.drafter.model = model;
     },
+    ingestTranscript: async (input) => {
+      const label = input.label;
+      if (label !== "lead" && label !== "discovery" && label !== "delivery") {
+        throw new StationError({
+          code: "transcript.unlabeled",
+          message: "transcript label is required",
+        });
+      }
+      await this.kit.writeContext({
+        id: input.id,
+        tenantId: input.tenantId,
+        body: input.body,
+        kind: label === "lead" ? "lead" : "client",
+        actor: input.actor,
+        label,
+      });
+      const parked = await this.kit.parkInbound({
+        id: input.id,
+        tenantId: input.tenantId,
+        mailboxId: input.mailboxId,
+        threadId: input.threadId,
+        body: input.body,
+        recordId: input.id,
+      });
+      const row = this.decisions.get(input.id);
+      if (row) {
+        row.body = `Next step: ${input.body}`;
+      }
+      return parked;
+    },
+    parkOpenWork: async (input) => {
+      const body = `${input.excerpt}\n${input.email}`;
+      await this.kit.writeContext({
+        id: input.id,
+        tenantId: input.tenantId,
+        body,
+        kind: "client",
+        actor: input.actor,
+        label: "delivery",
+      });
+      const parked = await this.kit.parkInbound({
+        id: input.id,
+        tenantId: input.tenantId,
+        mailboxId: input.mailboxId,
+        threadId: input.threadId,
+        body,
+        recordId: input.id,
+      });
+      const row = this.decisions.get(input.id);
+      if (row) {
+        row.body = body;
+      }
+      return parked;
+    },
     writeContext: async (input) => {
       const kind = input.kind;
       if (kind !== "lead" && kind !== "traveler" && kind !== "job" && kind !== "client") {
@@ -1797,6 +1851,50 @@ export class Station implements StationApi {
         if (path.startsWith("/brief") && req.method === "GET") {
           const query = parsed.searchParams.get("q") ?? "";
           write(200, { brief: this.briefText(query) });
+          return;
+        }
+        if (path === "/transcripts" && req.method === "POST") {
+          const body = JSON.parse(rawBody || "{}") as {
+            id?: string;
+            tenantId?: string;
+            actor?: string;
+            label?: string;
+            body?: string;
+            mailboxId?: string;
+            threadId?: string;
+          };
+          const saved = await this.kit.ingestTranscript({
+            id: body.id ?? "",
+            tenantId: body.tenantId ?? "",
+            actor: body.actor ?? "",
+            label: body.label,
+            body: body.body ?? "",
+            mailboxId: body.mailboxId ?? "",
+            threadId: body.threadId ?? "",
+          });
+          write(200, saved);
+          return;
+        }
+        if (path === "/open-work" && req.method === "POST") {
+          const body = JSON.parse(rawBody || "{}") as {
+            id?: string;
+            tenantId?: string;
+            actor?: string;
+            excerpt?: string;
+            email?: string;
+            mailboxId?: string;
+            threadId?: string;
+          };
+          const saved = await this.kit.parkOpenWork({
+            id: body.id ?? "",
+            tenantId: body.tenantId ?? "",
+            actor: body.actor ?? "",
+            excerpt: body.excerpt ?? "",
+            email: body.email ?? "",
+            mailboxId: body.mailboxId ?? "",
+            threadId: body.threadId ?? "",
+          });
+          write(200, saved);
           return;
         }
         if (path === "/hooks/lead" && req.method === "POST") {
